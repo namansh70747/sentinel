@@ -1,0 +1,27 @@
+{
+  "name": "sentinel",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sentinel — agentic SRE control plane for AWS and any observability stack.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "demo": "tsx apps/cli/src/main.ts replay",
+    "validate": "tsx apps/cli/src/main.ts catalog",
+    "dev:api": "tsx apps/api/src/main.ts",
+    "dev:console": "npm run dev -w @sentinel/console",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

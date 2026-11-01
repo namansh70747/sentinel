@@ -1,0 +1,11 @@
+{
+  "name": "@sentinel/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@sentinel/connectors": "*",
+    "@sentinel/engine": "*",
+    "@sentinel/fixtures": "*"
+  }
+}

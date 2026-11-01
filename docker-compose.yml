@@ -1,0 +1,40 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    environment:
+      SENTINEL_MODE: ${SENTINEL_MODE:-advise}
+      SENTINEL_WEBHOOK_SECRET: ${SENTINEL_WEBHOOK_SECRET:-change-me}
+    ports: ["8787:8787"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8787/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  console:
+    build:
+      context: .
+      target: console
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8787
+    ports: ["3010:3010"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17
+    profiles: ["durable"]
+    environment:
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: sentinel
+      POSTGRES_DB: sentinel
+    ports: ["5432:5432"]
+
+  temporal:
+    image: temporalio/temporal:latest
+    profiles: ["durable"]
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/tmp/temporal.db"]
+    ports: ["7233:7233", "8233:8233"]

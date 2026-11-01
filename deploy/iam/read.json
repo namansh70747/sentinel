@@ -1,0 +1,26 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadTelemetryAndChanges",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:Describe*",
+        "eks:DescribeCluster",
+        "eks:List*",
+        "elasticloadbalancing:Describe*",
+        "rds:Describe*",
+        "dynamodb:DescribeTable",
+        "dynamodb:ListTables",
+        "cloudtrail:LookupEvents",
+        "servicequotas:Get*",
+        "servicequotas:List*",
+        "health:Describe*",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:DescribeAlarms",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

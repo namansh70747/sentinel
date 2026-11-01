@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@import "@fontsource/dejavu-sans/400.css";
+@import "@fontsource/dejavu-sans/700.css";
+
+@theme {
+  --font-sans: "DejaVu Sans", "Avenir Next", sans-serif;
+  --font-mono: "DejaVu Sans Mono", ui-monospace, monospace;
+  --color-ink: #1a2330;
+  --color-muted: #5c6b7a;
+  --color-faint: #708090;
+  --color-bg: #fafafa;
+  --color-panel: #ffffff;
+  --color-panel-2: #d4e4f7;
+  --color-line: #c0c0c0;
+  --color-accent: #4a6fa5;
+  --color-amber: #4a6fa5;
+  --color-sev1: #9f2d2d;
+  --color-sev2: #9a3412;
+  --color-sev3: #854d0e;
+  --color-ok: #2f6b4f;
+}
+
+html,
+body {
+  background: #d4e4f7;
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: #b9d0ea;
+}
+
+:focus-visible {
+  outline: 2px solid #4a6fa5;
+  outline-offset: 2px;
+}
