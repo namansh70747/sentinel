@@ -65,7 +65,7 @@ export function FleetBoard({ incidents }: { incidents: ViewIncident[] }) {
           <ul className="mt-3">
             {live.map((item) => (
               <li key={`${item.id}-${item.at}`} className="border-t border-line py-2">
-                <Link href={`/incidents/${item.id}`} className="text-[15px] underline decoration-line underline-offset-4">
+                <Link href={`/demo/incidents/${item.id}`} className="text-[15px] underline decoration-line underline-offset-4">
                   {item.title}
                 </Link>
                 <span className="text-muted">, {item.outcome}</span>
@@ -80,7 +80,7 @@ export function FleetBoard({ incidents }: { incidents: ViewIncident[] }) {
         <ul className="mt-3">
           {incidents.map((item) => (
             <li key={item.id} className="grid grid-cols-1 gap-1 border-t border-line py-3 sm:grid-cols-[1.4fr_90px_1fr]">
-              <Link href={`/incidents/${item.id}`} className="text-[15px] underline decoration-line underline-offset-4">
+              <Link href={`/demo/incidents/${item.id}`} className="text-[15px] underline decoration-line underline-offset-4">
                 {item.title}
               </Link>
               <span className={item.severity === "sev1" ? "text-sev1" : "text-ok"}>{item.severity}</span>

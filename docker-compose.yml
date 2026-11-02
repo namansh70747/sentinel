@@ -8,7 +8,7 @@ services:
       SENTINEL_WEBHOOK_SECRET: ${SENTINEL_WEBHOOK_SECRET:-change-me}
     ports: ["8787:8787"]
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8787/healthz"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 3s
       retries: 5

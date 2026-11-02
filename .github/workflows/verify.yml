@@ -1,0 +1,57 @@
+name: Verify Sentinel
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: sentinel-ci-admin
+          POSTGRES_DB: sentinel_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sentinel_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://sentinel_app:sentinel-ci-runtime-password@localhost:5432/sentinel_test
+      SENTINEL_DATABASE_PASSWORD: sentinel-ci-runtime-password
+      TEST_DATABASE_URL: postgres://sentinel_app:sentinel-ci-runtime-password@localhost:5432/sentinel_test
+      TEST_TEMPORAL: 'true'
+      OIDC_ISSUER: https://identity.example
+      OIDC_CLIENT_ID: sentinel-ci
+      OIDC_CLIENT_SECRET: sentinel-ci-test-secret
+      SENTINEL_PUBLIC_URL: http://localhost:3023
+      TEST_CONSOLE_URL: http://localhost:3023
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate && npm run db:provision
+        env:
+          DATABASE_URL: postgres://postgres:sentinel-ci-admin@localhost:5432/sentinel_test
+      - name: Allow test role to exercise the append-only mutation trigger
+        run: node --import tsx scripts/ci-database.ts
+        env:
+          DATABASE_URL: postgres://postgres:sentinel-ci-admin@localhost:5432/sentinel_test
+      - run: npm run typecheck
+      - run: npm run build -w @sentinel/console
+      - name: Run all suites against the isolated console
+        working-directory: apps/console
+        shell: bash
+        run: |
+          node ../../node_modules/next/dist/bin/next start --port 3023 > console-ci.log 2>&1 &
+          sentinel_console_pid=$!
+          trap 'kill "$sentinel_console_pid" 2>/dev/null || true' EXIT
+          for sentinel_attempt in {1..50}; do
+            if curl -fsS http://localhost:3023/ > /dev/null; then break; fi
+            sleep 1
+          done
+          npm --prefix ../.. test
+      - run: npm audit --audit-level=moderate

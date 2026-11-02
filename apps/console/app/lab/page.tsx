@@ -1,5 +1,2 @@
-import { PolicyLab } from "../../components/policy-lab";
-
-export default function Lab() {
-  return <PolicyLab />;
-}
+import { redirect } from "next/navigation";
+export default function LegacyRoute() { redirect("/dashboard"); }

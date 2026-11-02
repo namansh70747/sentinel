@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DecideInput, EvidencePacket, SliWindows } from "@sentinel/contracts";
+import type { EvidencePacket, SliWindows } from "@sentinel/contracts";
+import type { DecideInput } from "./index";
 import { decide, isNeverVerb, NEVER_VERBS, severity } from "./index";
 
 const slo = { availabilitySlo: 0.999, latencySloMs: 300 };

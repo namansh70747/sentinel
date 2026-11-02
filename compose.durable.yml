@@ -1,0 +1,56 @@
+# Local development stack. Set passwords in .env; production requires managed secrets/TLS.
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: sentinel_admin
+      POSTGRES_PASSWORD: ${SENTINEL_DATABASE_ADMIN_PASSWORD:?Set SENTINEL_DATABASE_ADMIN_PASSWORD}
+      POSTGRES_DB: sentinel
+    volumes: [sentinel-postgres:/var/lib/postgresql]
+    ports: ["127.0.0.1:55441:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel_admin -d sentinel"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build: {context: ., target: migrate}
+    environment:
+      DATABASE_URL: postgres://sentinel_admin:${SENTINEL_DATABASE_ADMIN_PASSWORD}@postgres:5432/sentinel
+      SENTINEL_DATABASE_PASSWORD: ${SENTINEL_DATABASE_PASSWORD:?Set SENTINEL_DATABASE_PASSWORD}
+    depends_on:
+      postgres: {condition: service_healthy}
+  temporal:
+    image: temporalio/temporal:1.5.1
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db"]
+    volumes: [sentinel-temporal:/data]
+    ports: ["127.0.0.1:7233:7233", "127.0.0.1:8233:8233"]
+  console:
+    build: {context: ., target: console}
+    ports: ["127.0.0.1:3010:3010"]
+    environment:
+      DATABASE_URL: postgres://sentinel_app:${SENTINEL_DATABASE_PASSWORD}@postgres:5432/sentinel
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      SENTINEL_PUBLIC_URL: ${SENTINEL_PUBLIC_URL:-http://localhost:3010}
+      SENTINEL_CONFIG_WORKSPACE_ID: ${SENTINEL_CONFIG_WORKSPACE_ID:-}
+      PROMETHEUS_URL: ${PROMETHEUS_URL:-}
+      PROMETHEUS_TOKEN: ${PROMETHEUS_TOKEN:-}
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  worker-read:
+    build: {context: ., target: worker-read}
+    environment:
+      DATABASE_URL: postgres://sentinel_app:${SENTINEL_DATABASE_PASSWORD}@postgres:5432/sentinel
+      TEMPORAL_ADDRESS: temporal:7233
+      SENTINEL_CONFIG_WORKSPACE_ID: ${SENTINEL_CONFIG_WORKSPACE_ID:-}
+      PROMETHEUS_URL: ${PROMETHEUS_URL:-}
+      PROMETHEUS_TOKEN: ${PROMETHEUS_TOKEN:-}
+    restart: on-failure
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      temporal: {condition: service_started}
+volumes:
+  sentinel-postgres:
+  sentinel-temporal:

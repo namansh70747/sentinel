@@ -30,7 +30,7 @@ export function ConnectorBoard({ items }: { items: Item[] }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[32px] font-bold leading-none">Tools</h1>
-          <p className="mt-2 text-[14px] text-muted">{items.length} tools. A dark row still needs its credentials.</p>
+          <p className="mt-2 text-[14px] text-muted">{items.length} catalogued integrations. Prometheus connectivity can be verified above; other entries describe planned capabilities.</p>
         </div>
         <input
           value={query}
@@ -51,7 +51,7 @@ export function ConnectorBoard({ items }: { items: Item[] }) {
           </button>
         ))}
       </div>
-      <div className="mt-3 font-mono text-[11px] text-faint">{shown.length} shown · dark means the env vars are empty, which is expected</div>
+      <div className="mt-3 font-mono text-[11px] text-faint">{shown.length} shown · catalog entries are not verified connections</div>
       <div className="mt-2 grid gap-px bg-line sm:grid-cols-2 xl:grid-cols-3">
         {shown.map((item) => (
           <article key={item.id} className="bg-bg px-3 py-3">

@@ -1,0 +1,1 @@
+{"name":"@sentinel/worker-read","version":"0.1.0","private":true,"type":"module","dependencies":{"@sentinel/connectors":"*","@sentinel/db":"*","@sentinel/policy":"*","@sentinel/workflows":"*","@temporalio/client":"^1.25.0","@temporalio/worker":"^1.13.2"}}
