@@ -1,94 +1,79 @@
 # Sentinel
 
-Agentic SRE control plane. It watches a service's user-facing SLO, ranks what broke, and will only roll back a deploy it observed itself. Everything else is advice. Alarm titles are stored and never used as severity.
+Sentinel is an agentic SRE platform under active implementation. The repository currently contains an operator console, isolated incident demo, workspace-scoped Postgres foundation, OIDC login, passkey enrollment, Prometheus SLI collection and a read-only Temporal investigation workflow. Production actuation is not implemented.
 
-The loop runs with no cloud account. Fixtures are the evidence. Live Grafana, AWS, Slack, and Bedrock attach later through env vars, and they do not change the decision rules.
+## Open locally
 
-## Run it
+Use Node 24 and npm. The root runtime commands load `.env` automatically without printing its values.
 
-With Docker, one command:
-
-```bash
-cd ~/Projects/sentinel
-docker compose up --build
-```
-
-Postgres 17 and the Temporal dev server are behind a profile, for when the durable worker lands:
-
-```bash
-docker compose --profile durable up --build
-```
-
-Without Docker:
-
-```bash
-npm install
-npm test
-npm run demo
-SENTINEL_WEBHOOK_SECRET=local-dev npm run dev:api
+```sh
+npm ci
+cp .env.example .env
 npm run dev:console
 ```
 
-- Tests and `npm run demo` need nothing else.
-- API: http://localhost:8787 (`/v1/stream` is the live SSE feed)
-- Console: http://localhost:3010
+Website: http://localhost:3010. Workspace: http://localhost:3010/dashboard.
 
-## The console
+The normal API and demo are independent processes:
 
-- **Fleet** streams the SLI every second from the API. Press **Fire bad deploy** and the availability drops, the agent trace streams triage, rank, and decide, and a toast lands with the policy result.
-- **War room** replays an incident step by step. Scrub the timeline, watch hypotheses get kept or killed, and see the rollback dry-run diff appear only once policy decides.
-- **Policy lab** runs the same `decide()` the API runs, in the browser. Flip mode, strikes, verbs, signatures, and evidence and watch the decision change. A never-list verb never turns into allow.
-- **Topology** is a draggable dependency graph with the burning node and the throttled edge.
-- **⌘K** opens a command palette to jump anywhere or fire any replay scenario.
-
-The background is a WebGL mesh gradient from Paper Shaders, plus drifting aurora blobs. It shifts from amber to red when availability burns, and it goes still if the OS asks for reduced motion. Panels are glass, so the shader shows through the chart.
-
-The webhook at `/v1/signals/grafana` refuses everything until `SENTINEL_WEBHOOK_SECRET` is set. The console's fire buttons use `/v1/replay`, which only replays fixtures in the repo.
-
-`npm run validate` lists every connector and the env vars it would need.
-
-## What you do by hand
-
-Copy the template and fill only the block you are ready to use.
-
-```bash
-cp .env.example .env
+```sh
+npm run dev:api
+npm run dev:demo-api
 ```
 
-Leave `SENTINEL_MODE=advise`. Do not set it to `act` until a rollback has looked right in the lab for a week.
+The normal API runs on port 8787 with demo disabled. The demo runs on port 8790; open http://localhost:3010/demo to replay fixtures. The production dashboard does not subscribe to the demo feed. Without OIDC/database configuration the workspace displays setup instructions.
 
-| You want | Where it comes from | Vars |
-| --- | --- | --- |
-| Nothing. Replay only. | Already in the repo. | none |
-| Grafana alerts and SLIs | Grafana → Service accounts → token with read access to Prometheus, Loki, Tempo. Alert contact point POSTs to `http://<host>:8787/v1/signals/grafana` with header `x-sentinel-secret`. | `GRAFANA_URL`, `GRAFANA_TOKEN`, `SENTINEL_WEBHOOK_SECRET` |
-| AWS reads (deploys, health, quotas) | IAM role from `deploy/iam/read.json`, trusted by the host that runs the API. | `AWS_REGION`, `AWS_PROFILE` or `SENTINEL_READ_ROLE_ARN` |
-| A real rollback | Separate role from `deploy/iam/act.json`, scoped to one service. Then set the mode. The code path that calls `UpdateService` is not turned on in this build. | `SENTINEL_ACT_ROLE_ARN`, `SENTINEL_MODE=act` |
-| A model ranking on top of the rules | Amazon Bedrock, Claude with structured output. The deterministic ranker stays the floor. | `BEDROCK_REGION`, `BEDROCK_RANK_MODEL_ID` |
-| Durable workflows | `docker compose up` starts Postgres 17 and Temporal dev. The in-process machine is what tests run. | `DATABASE_URL`, `TEMPORAL_ADDRESS` |
-| Slack or PagerDuty | Bot token and a signing secret. Chat can post a ledger. It cannot approve a write. | `SLACK_BOT_TOKEN`, `PAGERDUTY_API_TOKEN` |
+## Durable local development
 
-Never put a write token in a connector that the catalog marks read-only. The never-list (IAM, security groups, data deletes, quota increases, spend) is refused even if a token could do it.
+Configure these in `.env`:
 
-## Layout
+- `SENTINEL_DATABASE_ADMIN_PASSWORD` and `SENTINEL_DATABASE_PASSWORD`: separate URL-safe passwords, at least 16 characters.
+- `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`: organization provider configuration. Register callback `http://localhost:3010/api/auth/callback` for local development. Remote deployments require HTTPS.
+- `SENTINEL_PUBLIC_URL`: the exact browser origin, with no trailing slash.
+- `SENTINEL_CONFIG_WORKSPACE_ID`: workspace UUID allowed to use this server’s provider credentials. Copy it from the dashboard after workspace creation. Other workspaces fail closed until per-workspace secret references are implemented.
+- `PROMETHEUS_URL`, optionally `PROMETHEUS_TOKEN`: reachable from the console/read-worker environment.
 
-- `packages/policy` — burn-rate severity and `decide()`. This is the authority.
-- `packages/engine` — signal, triage, rank, decide, verify, two strikes.
-- `packages/fixtures` — the replay set, including a healthy service with an alarm titled CRITICAL.
-- `packages/connectors` — the tool catalog and the env each tool needs.
-- `apps/api` — incidents, connectors, Grafana webhook.
-- `apps/cli` — `replay` and `catalog`.
-- `apps/console` — Next.js 16, React 19.2, Tailwind v4, Motion, cmdk, Sonner, React Flow. Fleet, war room, topology, catalog, changes, connectors, policy lab, audit.
-- `deploy/iam` — read role and act role to create in AWS when you are ready.
+```sh
+docker compose -f compose.durable.yml up --build
+```
 
-## Rules that are already enforced
+This development stack provides persistent Postgres and Temporal volumes, migrations, runtime-role provisioning, console and read worker. The Temporal development server is not a production Temporal deployment. Stop any existing process using port 3010 before starting the container console.
 
-- Severity is the multi-window burn on the availability SLI, or a latency breach when availability is fine.
-- A plan's revision comes from the evidence packet. The model is not in that path.
-- Advise mode never records an execute step.
-- Two missed verifies escalate and a third execute does not happen.
-- `iam:AttachRolePolicy` and the rest of the never-list return refuse.
-- Scale and other unsigned playbooks return refuse.
+For host processes instead of containers, set `DATABASE_URL` and `TEMPORAL_ADDRESS`, then run:
 
-## Not in this tree yet
+```sh
+npm run db:migrate
+npm run db:provision
+npm run dev:worker-read
+```
 
-Live clients for every connector, the Bedrock call, the Temporal worker, passkey approval, and the ECS `UpdateService` call. Those wait on the credentials above and on a second pass that should not start until `npm test` is the check you trust. The catalog, the env names, and the IAM documents are the contract for that pass.
+Migrate/provision with an administrative connection; run the console and worker with `sentinel_app`, a non-superuser role without `BYPASSRLS`. Provisioning preserves the password of an existing role. Never use a superuser as the runtime identity: it bypasses Postgres row-level security.
+
+## Current product flow
+
+1. Sign in with the configured OIDC provider. Login uses PKCE, state/nonce checks and single-use stored transactions; session tokens are stored hashed.
+2. Create a workspace, then register an ECS service. Only workspace admins can register services or configure SLO queries. Services start with actuation off.
+3. Configure availability target, latency target in milliseconds, and three Prometheus queries. Good/total request-count queries must include `{window}` for 5m, 30m, 1h and 6h. Each query must return exactly one series. Missing, stale, nonfinite or invalid observations are rejected.
+4. Start an investigation. The request persists an incident and outbox job atomically. The read worker dispatches an idempotent Temporal workflow, collects configured evidence and records advice or escalation. It cannot execute a production action.
+5. Review persisted evidence and workspace audit history. Audit rows are append-only, chained and canonically hashed; the UI verifies the returned segment, not an external immutable anchor.
+6. Create a Grafana webhook for a service. Configure its URL and one-time header secret in the Grafana contact point. Deliveries are deduplicated, firing alerts queue investigations, and resolved notifications do not close incidents. The dashboard can revoke the endpoint created in that view.
+7. Optionally enroll a passkey after signing in within five minutes. Enrollment requires authenticator user verification. Passkey-backed plan approval and production execution are still pending.
+
+The GitHub read adapter supports recent commit/deployment reads. The AWS ECS read adapter validates the target account/region and describes observed service state through a read role. Neither adapter is yet wired into incident collection. Connector catalog entries describe planned capabilities; they are not proof of working connections.
+
+## Verification
+
+```sh
+npm test
+npm run typecheck
+npm run build -w @sentinel/console
+npm audit
+```
+
+Optional integration suites:
+
+- `TEST_DATABASE_URL`: dedicated migrated test DB with a non-superuser runtime role. Tests create retained fixture workspaces; never point at a production database.
+- `TEST_TEMPORAL=true`: starts the SDK's ephemeral Temporal test server.
+- `TEST_CONSOLE_URL`: separately running console configured with the same test database and `https://identity.example` test issuer. HTTP tests create test sessions directly; they do not verify a real identity provider.
+
+See `docs/IMPLEMENTATION_STATUS.md` for verified work and remaining scope. AWS sandbox, real OIDC login, live telemetry providers and full deployment have not been verified.

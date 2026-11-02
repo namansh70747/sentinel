@@ -6,15 +6,15 @@ import { useEffect, useState } from "react";
 import { useLive } from "../lib/live";
 
 const pages = [
-  ["/", "Fleet"],
-  ["/incidents", "Incidents"],
-  ["/incidents/inc-bad-deploy-advise", "War room · bad deploy"],
-  ["/map", "Topology"],
-  ["/services", "Catalog"],
-  ["/changes", "Changes"],
+  ["/dashboard", "Overview"],
+  ["/demo/incidents", "Incidents"],
+  ["/demo/incidents/inc-bad-deploy-advise", "War room · bad deploy"],
+  ["/demo/map", "Topology"],
+  ["/demo/services", "Catalog"],
+  ["/demo/changes", "Changes"],
   ["/connectors", "Connectors"],
-  ["/lab", "Policy lab"],
-  ["/audit", "Audit"],
+  ["/demo/lab", "Policy lab"],
+  ["/demo/audit", "Audit"],
 ];
 
 const signals = [
@@ -26,7 +26,7 @@ const signals = [
   ["healthy-critical-title", "Fire: CRITICAL alarm on a healthy SLI"],
 ];
 
-export function Palette() {
+export function Palette({ demo = false }: { demo?: boolean }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { fire } = useLive();
@@ -62,7 +62,7 @@ export function Palette() {
       <Command.List className="max-h-[52vh] overflow-y-auto p-2">
         <Command.Empty className="px-3 py-6 text-center text-[13px] text-faint">Nothing matches.</Command.Empty>
         <Command.Group heading="Go to" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:tracking-[0.16em] [&_[cmdk-group-heading]]:text-faint">
-          {pages.map(([href, label]) => (
+          {(demo ? pages : [["/dashboard","Overview"],["/connectors","Integrations"],["/demo","Try demo"]]).map(([href, label]) => (
             <Command.Item
               key={href}
               value={label}
@@ -73,7 +73,7 @@ export function Palette() {
             </Command.Item>
           ))}
         </Command.Group>
-        <Command.Group heading="Replay a signal" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:tracking-[0.16em] [&_[cmdk-group-heading]]:text-faint">
+        {demo && <Command.Group heading="Replay a signal" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:tracking-[0.16em] [&_[cmdk-group-heading]]:text-faint">
           {signals.map(([id, label]) => (
             <Command.Item
               key={id}
@@ -84,7 +84,7 @@ export function Palette() {
               {label}
             </Command.Item>
           ))}
-        </Command.Group>
+        </Command.Group>}
       </Command.List>
     </Command.Dialog>
   );

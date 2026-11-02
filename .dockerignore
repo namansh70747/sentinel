@@ -4,3 +4,9 @@ node_modules
 .git
 .env
 *.log
+.env.*
+!.env.example
+work
+outputs
+.cursor
+coverage

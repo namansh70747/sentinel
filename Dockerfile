@@ -1,21 +1,18 @@
-FROM node:22-alpine AS base
+FROM node:24-bookworm-slim AS base
 WORKDIR /app
-COPY package.json package-lock.json ./
-COPY packages/contracts/package.json packages/contracts/
-COPY packages/policy/package.json packages/policy/
-COPY packages/engine/package.json packages/engine/
-COPY packages/fixtures/package.json packages/fixtures/
-COPY packages/connectors/package.json packages/connectors/
-COPY apps/api/package.json apps/api/
-COPY apps/cli/package.json apps/cli/
-COPY apps/console/package.json apps/console/
-RUN npm ci
 COPY . .
+RUN npm ci
 
 FROM base AS api
 ENV SENTINEL_PORT=8787
 EXPOSE 8787
-CMD ["npx", "tsx", "apps/api/src/main.ts"]
+CMD ["node", "--import", "tsx", "apps/api/src/main.ts"]
+
+FROM base AS migrate
+CMD ["sh", "-c", "npm run db:migrate && npm run db:provision"]
+
+FROM base AS worker-read
+CMD ["node", "--import", "tsx", "apps/worker-read/src/main.ts"]
 
 FROM base AS console-build
 ARG NEXT_PUBLIC_API_URL=http://localhost:8787

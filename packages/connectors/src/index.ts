@@ -170,3 +170,11 @@ export function connectorById(id: string): ConnectorManifest | undefined {
 export function missingEnv(manifest: ConnectorManifest, env: NodeJS.ProcessEnv = process.env): string[] {
   return manifest.authEnv.filter((key) => !env[key]);
 }
+
+export { PrometheusClient } from './prometheus';
+export type { PrometheusConfig, PrometheusSample } from './prometheus';
+export { collectSlo } from './slo';
+export type { SloMapping } from './slo';
+export { GitHubReadClient } from './github';
+export { normalizeGrafanaAlerts } from './grafana-alerts';
+export { EcsReadClient,parseEcsServiceArn } from './ecs-read';

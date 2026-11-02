@@ -10,5 +10,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["packages/**/*.ts", "apps/api/**/*.ts", "apps/cli/**/*.ts", "vitest.config.ts"]
+  "include": ["packages/**/*.ts", "apps/api/**/*.ts", "apps/worker-read/**/*.ts", "apps/cli/**/*.ts", "vitest.config.ts"]
 }
