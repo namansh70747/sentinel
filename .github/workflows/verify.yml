@@ -17,7 +17,7 @@ jobs:
           --health-cmd "pg_isready -U postgres -d sentinel_test"
           --health-interval 3s --health-timeout 3s --health-retries 20
     env:
-      DATABASE_URL: postgres://postgres:sentinel-ci-admin@localhost:5432/sentinel_test
+      DATABASE_URL: postgres://sentinel_app:sentinel-ci-runtime-password@localhost:5432/sentinel_test
       SENTINEL_DATABASE_PASSWORD: sentinel-ci-runtime-password
       TEST_DATABASE_URL: postgres://sentinel_app:sentinel-ci-runtime-password@localhost:5432/sentinel_test
       TEST_TEMPORAL: 'true'
@@ -34,8 +34,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:migrate && npm run db:provision
+        env:
+          DATABASE_URL: postgres://postgres:sentinel-ci-admin@localhost:5432/sentinel_test
       - name: Allow test role to exercise the append-only mutation trigger
         run: node --import tsx scripts/ci-database.ts
+        env:
+          DATABASE_URL: postgres://postgres:sentinel-ci-admin@localhost:5432/sentinel_test
       - run: npm run typecheck
       - run: npm run build -w @sentinel/console
       - name: Run all suites against the isolated console
