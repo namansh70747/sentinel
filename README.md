@@ -8,13 +8,13 @@ An agentic Site Reliability Engineering project for AWS services.
 
 **Current stage: working local foundation · Live cloud setup pending · Production actions disabled**
 
-[Understand the idea](#the-idea-in-one-minute) · [Learn the fundamentals](#fundamentals) · [Run the demo](#run-the-demo) · [See what works](#what-works-today) · [Teacher presentation](#presenting-sentinel-to-a-teacher)
+[Overview](#overview) · [Fundamentals](#fundamentals) · [Architecture](#architecture) · [Quick start](#run-the-demo) · [Implementation status](#what-works-today)
 
 </div>
 
 ---
 
-## The idea in one minute
+## Overview
 
 Imagine an online shopping website becomes slow after a new release. The engineer has to answer several questions:
 
@@ -28,11 +28,9 @@ Imagine an online shopping website becomes slow after a new release. The enginee
 
 The current implementation can collect configured Prometheus measurements and run a durable, read-only investigation. It produces an advisory result or escalates when evidence is unavailable. It **does not automatically repair production services**.
 
-> **Project explanation:** “Sentinel is a reliability assistant for engineering teams. It helps investigate service problems using evidence. Its long-term goal is controlled automation, with policy checks and human approval before permitted actions.”
+## Contents
 
-## Explore this README
-
-| I want to… | Open |
+| Topic | Reference |
 | --- | --- |
 | Understand the basic concepts | [Fundamentals](#fundamentals) |
 | Follow one investigation | [How it works](#how-an-investigation-works) |
@@ -41,14 +39,13 @@ The current implementation can collect configured Prometheus measurements and ru
 | Try the project without AWS | [Run the demo](#run-the-demo) |
 | Configure the real workspace | [Connect real services](#connect-real-services) |
 | Understand the safety rules | [Safety and trust](#safety-and-trust) |
-| Explain it in class | [Teacher presentation](#presenting-sentinel-to-a-teacher) |
 | Read commands and source layout | [Developer reference](#developer-reference) |
 
-The diagrams render on GitHub. Click the expandable sections below to open examples and technical details. A README does not run application JavaScript; the live interactive experience is in the website and console.
+Architecture diagrams and expandable reference sections are included below. The interactive website and console run locally.
 
 ## Fundamentals
 
-| Term | Easy meaning | Sentinel example |
+| Term | Definition | Example |
 | --- | --- | --- |
 | **SRE** — Site Reliability Engineering | Engineering work that keeps a service dependable. | Investigating why a shopping website is failing. |
 | **Service** | One application or component with a specific job. | The checkout backend. |
@@ -252,7 +249,7 @@ Then open:
 Try **Replay a bad deploy**, **Replay a retry storm**, or **Replay a false alarm**. Open a saved incident to inspect its simulated timeline and policy result.
 
 <details>
-<summary><strong>What should I point out during the demo?</strong></summary>
+<summary><strong>Demo scenarios</strong></summary>
 
 | Scenario | What it teaches |
 | --- | --- |
@@ -267,7 +264,7 @@ All of these are fixture scenarios. Even an “act mode” replay is a simulatio
 </details>
 
 <details>
-<summary><strong>Can I run a demonstration in the terminal?</strong></summary>
+<summary><strong>Command-line usage</strong></summary>
 
 ```sh
 npm run demo
@@ -328,7 +325,7 @@ Register the local OIDC callback as:
 http://localhost:3010/api/auth/callback
 ```
 
-Remote deployment requires HTTPS. Use different, URL-safe local database passwords of at least 16 characters. Keep secrets out of Git and presentation screenshots.
+Remote deployment requires HTTPS. Use different, URL-safe local database passwords of at least 16 characters. Keep credentials out of Git, logs and screenshots.
 
 For the durable local development stack:
 
@@ -381,7 +378,7 @@ Per-workspace secret references are not implemented yet. For now, only the expli
 | **Resolution is verified** | A resolved alert alone is not proof that the original SLI recovered. |
 
 <details>
-<summary><strong>Explain the security terms in simple words</strong></summary>
+<summary><strong>Security terminology</strong></summary>
 
 | Term | Meaning |
 | --- | --- |
@@ -416,60 +413,6 @@ The design's never-execute list includes:
 These should remain human decisions. The fixture policy tests include refusal cases. The current real worker has no production actuation path at all.
 
 Future permitted rollback will require a signed playbook, an exact execution-plan hash, fresh approval, policy checks and recovery verification. That complete execution path is not implemented yet.
-
-</details>
-
-## Presenting Sentinel to a teacher
-
-### A five-minute walkthrough
-
-| Time | What to show | What to explain |
-| --- | --- | --- |
-| 0:00–1:00 | Website and problem statement | Engineers need to connect user impact, monitoring data and recent changes. |
-| 1:00–2:00 | Investigation diagram | A signal becomes a queued workflow, then an evidence-backed result. |
-| 2:00–3:00 | Opt-in demo and one saved incident | The demo illustrates the intended investigation and policy behavior. |
-| 3:00–4:00 | Policy lab and false-alarm scenario | Safety rules matter; an alert title must not decide severity. |
-| 4:00–5:00 | Implementation table and tests | Explain which parts work locally and what still needs cloud setup. |
-
-<details>
-<summary><strong>Open a short presentation script</strong></summary>
-
-“Sentinel is my Site Reliability Engineering project. Its purpose is to help engineering teams investigate service problems in one place.
-
-“For example, if checkout requests start failing, an engineer needs to understand customer impact and collect evidence before choosing an action. Sentinel receives a signal, saves an investigation job and uses a durable workflow to collect configured monitoring measurements.
-
-“The current real workflow is read-only. It records advice or escalates when evidence is unavailable. A separate demo shows the broader incident-response design using saved scenarios.
-
-“The main engineering ideas are reliable background work, workspace access control, evidence validation and an audit trail. Automated production repair and several planned integrations are future work.”
-
-</details>
-
-<details>
-<summary><strong>Open likely viva questions and short answers</strong></summary>
-
-**Why not use only Grafana?**
-Grafana is a source of monitoring and alerts. Sentinel adds an application workflow for investigations, workspace access, evidence records and an audit history. Its broader integration and automation goals are still being built.
-
-**Is this an AI chatbot?**
-No. The current implementation is a workflow-driven system with deterministic rules. Model-assisted reasoning is planned; there is no live Bedrock reasoning integration yet.
-
-**What happens if Prometheus is unavailable?**
-The worker cannot obtain usable SLI evidence, so the investigation escalates rather than reporting good health.
-
-**Why Postgres and Temporal together?**
-Postgres stores application records. Temporal coordinates the workflow and its retries. Their roles are different.
-
-**What if Grafana sends the same alert twice?**
-The endpoint uses a deduplication key so a repeated delivery does not queue the same alert instance again.
-
-**Can it automatically roll back AWS?**
-The current real workflow cannot. The demo simulates rollback decisions. Production rollback needs the complete signed-playbook and approval boundary first.
-
-**How do you know it works?**
-The latest full local checkpoint passed **50 tests**, including database, Temporal and console HTTP tests. Tests cover specific behaviors; they do not replace live cloud or identity-provider verification.
-
-**What is the biggest remaining challenge?**
-Connecting real providers and finishing the authorization, approval and execution boundaries before enabling any production repair.
 
 </details>
 
