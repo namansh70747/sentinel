@@ -3,15 +3,15 @@ import type { EvidencePacket, Scenario, ServiceCatalog, SliWindows } from "@sent
 export const storefront: ServiceCatalog = {
   id: "storefront-web",
   name: "storefront-web",
-  account: "111111111111",
-  region: "us-east-1",
+  account: "110144245794",
+  region: "ap-southeast-2",
   runtime: "ecs",
-  owner: "naman",
+  owner: "harshit",
   availabilitySlo: 0.999,
   latencySloMs: 300,
   act: true,
   signedPlaybooks: ["rollback-last-deploy"],
-  resourceArn: "arn:aws:ecs:us-east-1:111111111111:service/store/web",
+  resourceArn: "arn:aws:ecs:ap-southeast-2:110144245794:service/sentinel-cluster/storefront-service",
 };
 
 const baseSli: SliWindows = {
