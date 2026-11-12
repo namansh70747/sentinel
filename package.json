@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:aws": "tsx scripts/verify-ecs.ts",
     "db:provision": "node scripts/run.mjs provision",
     "db:migrate": "node scripts/run.mjs migrate",
     "demo": "tsx apps/cli/src/main.ts replay",
