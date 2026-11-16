@@ -1,5 +1,5 @@
 import { auditHash } from "./audit";
-export { auditHash, verifyAuditSegment } from "./audit";
+export { auditHash, verifyAuditSegment, canonicalJson } from "./audit";
 import { randomUUID } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';

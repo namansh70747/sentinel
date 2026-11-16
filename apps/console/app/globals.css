@@ -5,24 +5,24 @@
 @theme {
   --font-sans: "DejaVu Sans", "Avenir Next", sans-serif;
   --font-mono: "DejaVu Sans Mono", ui-monospace, monospace;
-  --color-ink: #1a2330;
-  --color-muted: #5c6b7a;
-  --color-faint: #708090;
-  --color-bg: #fafafa;
+  --color-ink: #142226;
+  --color-muted: #3d4c52;
+  --color-faint: #7d8f99;
+  --color-bg: #f4f7f8;
   --color-panel: #ffffff;
-  --color-panel-2: #d4e4f7;
-  --color-line: #c0c0c0;
-  --color-accent: #4a6fa5;
-  --color-amber: #4a6fa5;
-  --color-sev1: #9f2d2d;
-  --color-sev2: #9a3412;
-  --color-sev3: #854d0e;
-  --color-ok: #2f6b4f;
+  --color-panel-2: #f4f7f8;
+  --color-line: #7d8f99;
+  --color-accent: #142226;
+  --color-amber: #142226;
+  --color-sev1: #8c2f2f;
+  --color-sev2: #8c2f2f;
+  --color-sev3: #8c2f2f;
+  --color-ok: #1f7a4d;
 }
 
 html,
 body {
-  background: #d4e4f7;
+  background: #f4f7f8;
   color: var(--color-ink);
 }
 
@@ -31,8 +31,13 @@ body {
 }
 
 ::selection {
-  background: #b9d0ea;
+  background: #d5dee2;
 }
+
+.source-list { list-style: none; padding: 0; }
+.source-list li { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid #7d8f99; }
+.source-list li.simulated { border-bottom-style: dashed; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
 :focus-visible {
   outline: 2px solid #4a6fa5;

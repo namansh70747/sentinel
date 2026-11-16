@@ -20,3 +20,7 @@ export async function collectSlo(client:PrometheusClient, mapping:SloMapping, no
  if(latency<0)throw new Error('Invalid latency');
  return {availabilitySlo:mapping.availabilityTarget,latencySloMs:mapping.latencyTargetMs,good5m:counts[0].good,total5m:counts[0].total,good30m:counts[1].good,total30m:counts[1].total,good1h:counts[2].good,total1h:counts[2].total,good6h:counts[3].good,total6h:counts[3].total,p99_10m_ms:latency,dataLoss:false};
 }
+/** True only when a 15-second scrape has covered most of six hours. A fresh instant is not coverage. */
+export function windowCovered(sampleCount:number, scrapeSeconds=15) {
+ return sampleCount >= Math.floor((6 * 3600) / scrapeSeconds * 0.8);
+}

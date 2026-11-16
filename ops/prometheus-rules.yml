@@ -1,0 +1,10 @@
+groups:
+  - name: workload
+    rules:
+      - alert: WorkloadFailures
+        expr: sum(rate(workload_requests_total[5m])) > 0 and sum(rate(workload_requests_good[5m])) < 0.8 * sum(rate(workload_requests_total[5m]))
+        for: 1m
+        labels:
+          severity: page
+        annotations:
+          summary: Checkout requests are failing

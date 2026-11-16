@@ -30,7 +30,7 @@ export function ConnectorBoard({ items }: { items: Item[] }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[32px] font-bold leading-none">Tools</h1>
-          <p className="mt-2 text-[14px] text-muted">{items.length} catalogued integrations. Prometheus connectivity can be verified above; other entries describe planned capabilities.</p>
+          <p className="mt-2 text-[14px] text-muted">{items.length} catalogued integrations. A green state requires a stored evidence outcome of ok. OnCall is not installed. Cloud entries stay simulated until a sandbox role is configured.</p>
         </div>
         <input
           value={query}

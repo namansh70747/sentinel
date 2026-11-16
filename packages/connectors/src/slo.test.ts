@@ -1,5 +1,5 @@
 import { describe,expect,it,vi } from 'vitest';
-import { collectSlo } from './slo';
+import { collectSlo, windowCovered } from './slo';
 import type { PrometheusClient } from './prometheus';
 const mapping={availabilityTarget:.999,latencyTargetMs:300,goodQuery:'good[{window}]',totalQuery:'total[{window}]',latencyQuery:'latency'};
 const now=1700000000000;
@@ -13,5 +13,9 @@ describe('live SLI evidence validation',()=>{
   await expect(collectSlo(client(()=>1,now/1000-121),mapping,now)).rejects.toThrow('Stale');
   await expect(collectSlo(client(()=>0),mapping,now)).rejects.toThrow('absent');
   await expect(collectSlo(client(q=>q.startsWith('good')?2:1),mapping,now)).rejects.toThrow('Invalid');
+ });
+ it('does not treat a short series as six hours of history',()=>{
+  expect(windowCovered(187)).toBe(false);
+  expect(windowCovered(1400)).toBe(true);
  });
 });

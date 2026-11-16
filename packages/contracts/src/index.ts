@@ -40,6 +40,10 @@ export interface ServiceCatalog {
   resourceArn: string;
 }
 
+export type SourceName = 'prometheus' | 'ecs' | 'loki' | 'tempo' | 'github' | 'cloudwatch' | 'cost' | 'dr';
+export type SourceOutcome = 'ok' | 'unavailable' | 'stale' | 'not-configured' | 'uncovered';
+export type Provenance = 'live' | 'simulated';
+export interface SourceResult { source: SourceName; outcome: SourceOutcome; provenance: Provenance | null; summary: string }
 export interface SliWindows {
   availabilitySlo: number;
   latencySloMs: number;

@@ -27,4 +27,14 @@ describe.skipIf(!url)('Postgres workspace isolation and audit durability', () =>
   expect(bRows[0].workspace_id).toBe(b);
   await expect(db.inWorkspace(a, client => client.query('INSERT INTO audit_events(workspace_id,id,actor,action,payload,previous_hash,hash) VALUES($1,$2,$3,$4,$5,$6,$7)',[b,randomUUID(),'attacker','test',{},'0'.repeat(64),'a'.repeat(64)]))).rejects.toThrow();
  });
+ it('rejects attaching another service’s evidence to an incident',async()=>{
+  const first=randomUUID(),second=randomUUID(),incident=randomUUID();
+  await db.inWorkspace(a,async c=>{
+   for(const id of [first,second])await c.query('INSERT INTO services(workspace_id,id,name,owner,account_id,region,resource_arn) VALUES($1,$2,$3,$4,$5,$6,$7)',[a,id,id,'team','123456789012','us-east-1',`arn:aws:ecs:us-east-1:123456789012:service/a/${id}`]);
+   await c.query("INSERT INTO incidents(workspace_id,id,service_id,title,state,severity) VALUES($1,$2,$3,'incident','investigating','sev4')",[a,incident,first]);
+  });
+  await expect(db.inWorkspace(a,c=>c.query("INSERT INTO ecs_evidence(workspace_id,incident_id,service_id,observation,provenance) VALUES($1,$2,$3,$4,'live')",[a,incident,second,{}]))).rejects.toThrow('foreign key');
+  await expect(db.inWorkspace(a,c=>c.query("INSERT INTO incident_evidence(workspace_id,incident_id,service_id,source,sample,severity,outcome,provenance,detail) VALUES($1,$2,$3,'prometheus',$4,'sev1','ok','live',$4)",[a,incident,second,{}]))).rejects.toThrow('foreign key');
+ });
+
 });

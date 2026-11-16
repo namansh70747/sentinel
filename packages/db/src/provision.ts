@@ -15,7 +15,7 @@ try {
  }
  await client.query('GRANT USAGE ON SCHEMA public TO sentinel_app');
  await client.query('GRANT SELECT,INSERT,UPDATE ON workspaces,services,incidents,service_slos,investigation_jobs TO sentinel_app');
- await client.query('GRANT SELECT,INSERT ON audit_events,incident_evidence TO sentinel_app');
+ await client.query('GRANT SELECT,INSERT ON audit_events,incident_evidence,ecs_evidence,change_hypotheses,execution_plans,approval_proofs,proof_reservations TO sentinel_app');
  await client.query('GRANT SELECT,INSERT,UPDATE,DELETE ON identities,workspace_memberships,login_transactions,sessions,passkeys,passkey_challenges,webhook_endpoints,webhook_deliveries TO sentinel_app');
  await client.query('GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO sentinel_app');
  await client.query('COMMIT');console.log('Least-privilege runtime database role provisioned. Existing role credentials are preserved.');

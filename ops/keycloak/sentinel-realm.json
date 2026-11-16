@@ -1,0 +1,18 @@
+{
+  "realm": "sentinel",
+  "enabled": true,
+  "clients": [{
+    "clientId": "sentinel",
+    "enabled": true,
+    "protocol": "openid-connect",
+    "publicClient": false,
+    "secret": "sentinel-local-client-secret",
+    "redirectUris": ["http://127.0.0.1:3023/api/auth/callback"],
+    "webOrigins": ["http://127.0.0.1:3023"]
+  }],
+  "users": [{
+    "username": "operator",
+    "enabled": true,
+    "credentials": [{ "type": "password", "value": "change-me-operator-pw", "temporary": false }]
+  }]
+}
