@@ -6,6 +6,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "sonner";
 import { LiveProvider, useLive } from "../lib/live";
 import { Palette } from "./palette";
+import { Activity, ArrowUpRight, FileCheck2, Layers, LayoutDashboard, Plug, Shield, ShieldCheck, ChevronRight } from 'lucide-react';
+import './showcase.css';
+import './product.css';
 
 const links = [
   ["/dashboard", "Overview"],
@@ -21,6 +24,8 @@ const links = [
 export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
   if (path === "/" || path === "/demo/showcase") return <>{children}</>;
+  if (path === '/login') return <div className="sc-app sc-auth"><main className="sc-product-content"><Link href="/" className="sc-brand"><Shield size={24}/>sentinel.</Link>{children}</main></div>;
+  if (!path.startsWith('/demo')) return <ProductFrame>{children}<Toaster theme="light" position="bottom-right" /></ProductFrame>;
   return (
     <LiveProvider enabled={path.startsWith("/demo")}>
       <Frame>{children}</Frame>
@@ -28,6 +33,24 @@ export function Shell({ children }: { children: ReactNode }) {
       <Toaster theme="light" position="bottom-right" />
     </LiveProvider>
   );
+}
+
+function ProductFrame({children}:{children:ReactNode}) {
+ const path=usePathname();
+ const [signingOut,setSigningOut]=useState(false),[logoutError,setLogoutError]=useState('');
+ async function signOut(){setSigningOut(true);setLogoutError('');try{const response=await fetch('/api/auth/logout',{method:'POST'});if(!response.ok)throw new Error();window.location.assign('/login');}catch{setLogoutError('Unable to sign out. Please retry.');setSigningOut(false);}}
+ const items=[{href:'/dashboard',label:'Overview',icon:LayoutDashboard},{href:'/incidents',label:'Incidents',icon:Activity},{href:'/services',label:'Services',icon:Layers},{href:'/connectors',label:'Connectors',icon:Plug},{href:'/audit',label:'Audit log',icon:FileCheck2}];
+ const active=items.find(item=>path.startsWith(item.href));
+ return <div className="sc-app sc-product">
+  <aside className="sc-sidebar">
+   <Link href="/dashboard" className="sc-brand"><span className="sc-logo"><Shield size={22}/></span>sentinel<span className="sc-brand-dot">.</span></Link>
+   <div className="sc-workspace"><span className="sc-workspace-icon">S</span><div><strong>Your workspaces</strong><small>Select a workspace below</small></div></div>
+   <span className="sc-nav-label">WORKSPACE</span>
+   <nav aria-label="Product navigation">{items.map(({href,label,icon:Icon})=><Link key={href} href={href} aria-label={label} title={label} aria-current={path.startsWith(href)?'page':undefined} className={`sc-product-nav ${path.startsWith(href)?'active':''}`}><Icon size={18}/><span>{label}</span></Link>)}</nav>
+   <div className="sc-sidebar-bottom"><Link className="sc-readiness" aria-label="Explore demo" title="Explore demo" href="/demo/showcase"><span>Explore demo</span><ArrowUpRight size={15}/></Link><div className="sc-safe"><ShieldCheck size={18}/><div><strong>Read-only by design</strong><small>Evidence before action</small></div></div></div>
+  </aside>
+  <div className="sc-main"><header className="sc-topbar"><div><span className="sc-breadcrumb">Workspace</span><ChevronRight size={14}/><strong>{active?.label??'Workspace'}</strong></div><div className="sc-header-right"><span className="sc-environment"><i/>Advise mode</span>{path!=='/login'&&<button onClick={signOut} disabled={signingOut}>{signingOut?'Signing out…':'Sign out'}</button>}</div></header>{logoutError&&<p role="alert">{logoutError}</p>}<main className="sc-content sc-product-content">{children}</main><footer className="sc-footer"><span><Shield size={13}/>Sentinel / Evidence before action.</span><Link href="/demo/showcase">Open interactive demo <ArrowUpRight size={12}/></Link></footer></div>
+ </div>;
 }
 
 function Frame({ children }: { children: ReactNode }) {

@@ -2,6 +2,8 @@
 
 ## Current execution — 2026-11-16
 
+Frontend direction updated by the user: reuse the localhost:3011 showcase visual system for the real product. Shared showcase tokens/shell styling now drive real console navigation and forms, with dedicated authenticated incidents, services and audit screens. The overview shows actual service count and membership role. Browser verification completed actual Keycloak login/callback and local workspace creation. Desktop and 390px mobile layouts inspected; mobile document width was 390px. Console production build, standalone showcase build, console typecheck and 70 default tests passed (20 integration tests skipped). UI review findings for misleading connected-state copy and narrow link navigation were addressed. Full redesign, charts, connector management and remaining product modules are still pending.
+
 Follow-up local OIDC slice: 70 default tests passed / 20 skipped; root and console typechecks passed. HTTP is allowed only with an explicit flag and exact loopback issuer. Generated ignored Keycloak realm imported successfully into an isolated Keycloak 26.4.2 instance on port 18088. Actual discovery and `begin()` verified authorization endpoint, S256 PKCE, state and nonce. Browser callback/login/logout/passkeys remain unverified. Shared committed operator/client secrets were removed from the reference realm. Generated secrets are kept under ignored `.local/keycloak/`.
 
 Baseline main is `3ebe3b6`; the following execution changes are local and not yet published.

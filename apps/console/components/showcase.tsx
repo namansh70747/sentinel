@@ -29,10 +29,12 @@ export function Showcase(){
  async function reset(){generation.current++;setProgress(-1);const result=await investigate('deployment');setRuns([result]);setSelected(result.id);setScenario('deployment');setTab('Evidence');setQuery('');setView('Overview');setNotice('Demo reset. A fresh sample investigation is ready.');}
  const filtered=runs.filter(x=>`${x.id} ${x.title} ${x.status}`.toLowerCase().includes(query.toLowerCase()));
  const degraded=run?.scenario==='deployment';const stale=run?.scenario==='stale';
+ const productHref=ready&&typeof window!=='undefined'&&window.location.port==='3011'?'http://localhost:3010/dashboard':'/dashboard';
  return <div className="sc-app">
   <aside className="sc-sidebar">
    <a className="sc-brand" href="#" onClick={e=>{e.preventDefault();setView('Overview');}}><span className="sc-logo"><Shield size={21} strokeWidth={2.2}/></span>sentinel<span className="sc-brand-dot">.</span></a>
    <div className="sc-workspace"><span className="sc-workspace-icon">S</span><div><strong>Sentinel workspace</strong><small>Sandbox environment</small></div><ChevronDown size={14}/></div>
+   <a className="sc-button sc-primary" style={{marginBottom:20}} href={productHref}>Open workspace <ArrowUpRight size={14}/></a>
    <span className="sc-nav-label">WORKSPACE</span>
    <nav aria-label="Main navigation">{navigation.map(({name,icon:Icon})=><button key={name} onClick={()=>setView(name)} className={view===name?'active':''}><Icon size={18}/><span>{name}</span>{name==='Incidents'&&<small>{runs.length}</small>}</button>)}</nav>
    <div className="sc-sidebar-bottom"><button className={`sc-readiness ${view==='Demo readiness'?'active':''}`} onClick={()=>setView('Demo readiness')}><FlaskConical size={17}/>Demo readiness<ArrowUpRight size={14}/></button><div className="sc-safe"><ShieldCheck size={18}/><div><strong>Read-only by design</strong><small>No infrastructure actions</small></div></div><div className="sc-user"><span>AS</span><div><strong>Aastha</strong><small>Demo operator · local identity</small></div></div></div>
