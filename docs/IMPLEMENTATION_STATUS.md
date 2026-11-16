@@ -2,6 +2,8 @@
 
 ## Current execution — 2026-11-16
 
+Follow-up local OIDC slice: 70 default tests passed / 20 skipped; root and console typechecks passed. HTTP is allowed only with an explicit flag and exact loopback issuer. Generated ignored Keycloak realm imported successfully into an isolated Keycloak 26.4.2 instance on port 18088. Actual discovery and `begin()` verified authorization endpoint, S256 PKCE, state and nonce. Browser callback/login/logout/passkeys remain unverified. Shared committed operator/client secrets were removed from the reference realm. Generated secrets are kept under ignored `.local/keycloak/`.
+
 Baseline main is `3ebe3b6`; the following execution changes are local and not yet published.
 
 Latest additional evidence: root suite 69 passed / 20 skipped; root and console TypeScript checks passed; console production build and showcase build passed. The authenticated console HTTP suite passed against local `sentinel_test`, including cross-tenant detail denial and access beyond the list's first 100 incidents. Real failed-request OTLP export to isolated Tempo returned a retrievable trace (HTTP 200, 1921 bytes). Temporary validation container was removed. Source ID: `85e8f82f809998f2d161b5a88bf605b4`.

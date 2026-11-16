@@ -6,8 +6,11 @@ Set unique local database, Grafana and Keycloak passwords in the ignored `.env` 
 Validate the combined configuration before startup:
 
 ```sh
+npm run dev:prepare-auth
 docker compose -p sentinel -f compose.durable.yml -f compose.observe.yml -f compose.local.yml config --quiet
 ```
+
+Auth preparation creates ignored `.local/keycloak/realm.json`, `operator-password` and `oidc.env`. It preserves generated credentials on repeated runs. The realm imports on first startup; an existing realm is not silently overwritten. The generated client uses authorization code + PKCE and callback `http://localhost:3010/api/auth/callback`. For a host-run console, load the generated `oidc.env` into its environment along with the database configuration. Local HTTP discovery requires the explicit `SENTINEL_ALLOW_LOCAL_OIDC_HTTP=true` flag and an exact loopback issuer. Containerized browser/server issuer routing still needs acceptance verification.
 
 Start the local application and providers:
 

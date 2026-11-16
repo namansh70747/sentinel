@@ -1,18 +1,23 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import * as oidc from 'openid-client';
 import type { SentinelDatabase } from '@sentinel/db';
-export interface AuthConfig { issuer: string; clientId: string; clientSecret: string; redirectUri: string }
+export interface AuthConfig { issuer: string; clientId: string; clientSecret: string; redirectUri: string; allowLocalHttp?: boolean }
 const hash = (token: string) => createHash('sha256').update(token).digest('hex');
 const token = () => randomBytes(32).toString('base64url');
 export class SentinelAuth {
  private configuration?: Promise<oidc.Configuration>;
  constructor(private readonly db: SentinelDatabase, private readonly config: AuthConfig) {
-  if (new URL(config.issuer).protocol !== 'https:') throw new Error('OIDC issuer must use HTTPS');
+  const issuer = new URL(config.issuer);
+  const localHttp = config.allowLocalHttp === true && issuer.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(issuer.hostname);
+  if (issuer.username || issuer.password || issuer.search || issuer.hash || (issuer.protocol !== 'https:' && !localHttp)) throw new Error('OIDC issuer must use HTTPS or explicitly enabled loopback HTTP');
   const redirect = new URL(config.redirectUri);
-  if (redirect.protocol !== 'https:' && !['localhost', '127.0.0.1'].includes(redirect.hostname)) throw new Error('Non-local callback must use HTTPS');
+  if (redirect.username || redirect.password || (redirect.protocol !== 'https:' && !(redirect.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(redirect.hostname)))) throw new Error('Non-local callback must use HTTPS');
  }
  private client() {
-  return this.configuration ??= oidc.discovery(new URL(this.config.issuer), this.config.clientId, this.config.clientSecret);
+  return this.configuration ??= oidc.discovery(new URL(this.config.issuer), this.config.clientId, this.config.clientSecret, undefined, {
+   timeout: 10,
+   ...(new URL(this.config.issuer).protocol === 'http:' && this.config.allowLocalHttp ? { execute: [oidc.allowInsecureRequests] } : {}),
+  });
  }
  async begin() {
   const config = await this.client();

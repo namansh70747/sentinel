@@ -9,6 +9,7 @@
     "apps/*"
   ],
   "scripts": {
+    "dev:prepare-auth": "SENTINEL_PUBLIC_URL=http://localhost:3010 node scripts/dev/prepare-keycloak.mjs",
     "dev:wait": "node scripts/dev/wait.mjs",
     "scenario:healthy": "node scripts/scenarios/traffic.mjs healthy",
     "scenario:degradation": "node scripts/scenarios/traffic.mjs degradation",

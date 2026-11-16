@@ -11,7 +11,7 @@ export function getDatabase() {
 export function getAuth() {
  const { DATABASE_URL, OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, SENTINEL_PUBLIC_URL } = process.env;
  if (!DATABASE_URL || !OIDC_ISSUER || !OIDC_CLIENT_ID || !OIDC_CLIENT_SECRET || !SENTINEL_PUBLIC_URL) return null;
- return auth ??= new SentinelAuth(getDatabase(), { issuer: OIDC_ISSUER, clientId: OIDC_CLIENT_ID, clientSecret: OIDC_CLIENT_SECRET, redirectUri: new URL('/api/auth/callback',SENTINEL_PUBLIC_URL).href });
+ return auth ??= new SentinelAuth(getDatabase(), { issuer: OIDC_ISSUER, clientId: OIDC_CLIENT_ID, clientSecret: OIDC_CLIENT_SECRET, redirectUri: new URL('/api/auth/callback',SENTINEL_PUBLIC_URL).href, allowLocalHttp: process.env.SENTINEL_ALLOW_LOCAL_OIDC_HTTP === 'true' });
 }
 export async function currentIdentity() {
  const provider = getAuth();

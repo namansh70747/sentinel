@@ -8,6 +8,15 @@ it('rejects insecure remote identity providers and callbacks', () => {
  expect(() => new SentinelAuth(db,{...config,issuer:'http://identity.example'})).toThrow();
  expect(() => new SentinelAuth(db,{...config,redirectUri:'http://console.example/callback'})).toThrow();
 });
+it('allows HTTP only for an explicitly enabled local loopback issuer', () => {
+ const db = {} as SentinelDatabase;
+ expect(() => new SentinelAuth(db,{...config,issuer:'http://localhost:8088/realms/sentinel'})).toThrow();
+ expect(() => new SentinelAuth(db,{...config,issuer:'http://localhost:8088/realms/sentinel',allowLocalHttp:true})).not.toThrow();
+ expect(() => new SentinelAuth(db,{...config,issuer:'http://127.0.0.1:8088/realms/sentinel',allowLocalHttp:true})).not.toThrow();
+ expect(() => new SentinelAuth(db,{...config,issuer:'http://identity.example',allowLocalHttp:true})).toThrow();
+ expect(() => new SentinelAuth(db,{...config,issuer:'http://localhost.evil.test',allowLocalHttp:true})).toThrow();
+ expect(() => new SentinelAuth(db,{...config,issuer:'http://user:pass@localhost:8088',allowLocalHttp:true})).toThrow();
+});
 describe.skipIf(!process.env.TEST_DATABASE_URL)('persistent sessions', () => {
  const db = new SentinelDatabase(process.env.TEST_DATABASE_URL!);
  const auth = new SentinelAuth(db,config), identity = randomUUID(), raw = randomBytes(32).toString('base64url');
