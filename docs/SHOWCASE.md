@@ -24,13 +24,13 @@ The original `/demo` and real workspace flows remain available.
 
 ## Mock AWS connector configuration
 
-Open Connectors and click **Generate demo credentials**, then **Test mock connection**.
+Open Connectors and click **Generate sandbox profile**, then **Test connection**.
 The dummy key ID begins `DEMO_ONLY_ACCESS_`; the dummy secret begins
 `DEMO_ONLY_SECRET_`. These are intentionally invalid for AWS, stay in React
 memory only, and are never transmitted or persisted. The mock test validates
 the placeholder format and fictional account/region before reading the local
 healthy ECS fixture. Editing fields clears the previous connection result.
-The result is labelled **Mock connected**, not live AWS authentication.
+The connector retains a **Simulated** badge; its verified state refers only to the local simulation. The staged checks do not authenticate with AWS.
 Investigations remain independently runnable without this optional setup.
 
 ## Three-minute presentation
