@@ -22,6 +22,17 @@ The same component is available inside the original console:
 `npm run dev:console`, then http://localhost:3010/demo/showcase.
 The original `/demo` and real workspace flows remain available.
 
+## Mock AWS connector configuration
+
+Open Connectors and click **Generate demo credentials**, then **Test mock connection**.
+The dummy key ID begins `DEMO_ONLY_ACCESS_`; the dummy secret begins
+`DEMO_ONLY_SECRET_`. These are intentionally invalid for AWS, stay in React
+memory only, and are never transmitted or persisted. The mock test validates
+the placeholder format and fictional account/region before reading the local
+healthy ECS fixture. Editing fields clears the previous connection result.
+The result is labelled **Mock connected**, not live AWS authentication.
+Investigations remain independently runnable without this optional setup.
+
 ## Three-minute presentation
 
 1. Start at Overview. Explain the persistent DEMO MODE banner.
