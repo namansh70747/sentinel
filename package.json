@@ -19,14 +19,17 @@
     "dev:demo-api": "node scripts/run.mjs demo",
     "dev:worker-read": "node scripts/run.mjs worker",
     "dev:console": "node scripts/run.mjs console dev",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build:showcase": "node apps/showcase/build.mjs",
+    "demo:showcase": "npm run build:showcase && node apps/showcase/serve.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
     "@types/pg": "^8.23.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "esbuild": "^0.28.0"
   },
   "engines": {
     "node": ">=22"

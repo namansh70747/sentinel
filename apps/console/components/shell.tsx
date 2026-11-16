@@ -20,7 +20,7 @@ const links = [
 
 export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
-  if (path === "/") return <>{children}</>;
+  if (path === "/" || path === "/demo/showcase") return <>{children}</>;
   return (
     <LiveProvider enabled={path.startsWith("/demo")}>
       <Frame>{children}</Frame>

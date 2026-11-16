@@ -9,3 +9,5 @@ coverage
 .DS_Store
 data/*.json
 !data/.gitkeep
+
+apps/showcase/dist/
