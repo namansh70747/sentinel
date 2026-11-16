@@ -47,8 +47,8 @@ export const CONNECTORS: ConnectorManifest[] = [
   c("prometheus", "Prometheus", "telemetry", ["metrics", "alerts"], ["PROMETHEUS_URL"]),
   c("mimir", "Grafana Mimir", "telemetry", ["metrics"], ["GRAFANA_URL", "GRAFANA_TOKEN"]),
   c("grafana", "Grafana", "telemetry", ["metrics", "logs", "traces", "alerts"], ["GRAFANA_URL", "GRAFANA_TOKEN"]),
-  c("loki", "Grafana Loki", "telemetry", ["logs"], ["GRAFANA_URL", "GRAFANA_TOKEN"]),
-  c("tempo", "Grafana Tempo", "telemetry", ["traces"], ["GRAFANA_URL", "GRAFANA_TOKEN"]),
+  c("loki", "Grafana Loki", "telemetry", ["logs"], ["LOKI_URL"]),
+  c("tempo", "Grafana Tempo", "telemetry", ["traces"], ["TEMPO_URL"]),
   c("pyroscope", "Grafana Pyroscope", "telemetry", ["profiles"], ["GRAFANA_URL", "GRAFANA_TOKEN"]),
   c("cloudwatch", "Amazon CloudWatch", "telemetry", ["metrics", "logs", "alerts"], ["AWS_REGION", "SENTINEL_READ_ROLE_ARN"]),
   c("xray", "AWS X-Ray", "telemetry", ["traces"], ["AWS_REGION", "SENTINEL_READ_ROLE_ARN"]),
@@ -173,8 +173,16 @@ export function missingEnv(manifest: ConnectorManifest, env: NodeJS.ProcessEnv =
 
 export { PrometheusClient } from './prometheus';
 export type { PrometheusConfig, PrometheusSample } from './prometheus';
-export { collectSlo } from './slo';
+export { collectSlo, windowCovered } from './slo';
 export type { SloMapping } from './slo';
 export { GitHubReadClient } from './github';
 export { normalizeGrafanaAlerts } from './grafana-alerts';
 export { EcsReadClient,parseEcsServiceArn } from './ecs-read';
+export { MockEcsReadClient, MOCK_SERVICE_ARN } from './ecs-mock';
+export { LokiClient } from './loki';
+export { TempoClient } from './tempo';
+export { publishNtfy } from './ntfy';
+export { assertAllowed } from './egress';
+export { simulateCloudWatch } from './cloudwatch-sim';
+export { simulateCost } from './cost-sim';
+export { simulateDr } from './dr-sim';

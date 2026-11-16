@@ -7,6 +7,7 @@
     "@sentinel/contracts": "*"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./signatures": "./src/signatures.ts"
   }
 }

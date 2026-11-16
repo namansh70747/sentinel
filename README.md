@@ -1,3 +1,9 @@
+# Credential-free presentation demo
+
+Run `npm ci` then `npm run demo:showcase`, and open http://localhost:3011.
+Four clearly labelled synthetic scenarios work without AWS credentials or backend services.
+See [the presentation and setup guide](docs/SHOWCASE.md) for what is implemented and what remains pending.
+
 <div align="center">
 
 # Sentinel

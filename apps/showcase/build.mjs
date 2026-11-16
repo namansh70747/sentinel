@@ -1,0 +1,12 @@
+import {build} from 'esbuild';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../../',import.meta.url));
+const out=root+'apps/showcase/dist';
+await mkdir(out,{recursive:true});
+await build({entryPoints:[root+'apps/showcase/entry.tsx'],bundle:true,minify:true,format:'iife',target:'es2022',jsx:'automatic',outfile:out+'/app.js',define:{'process.env.NODE_ENV':'"production"'},legalComments:'none'});
+const js=(await readFile(out+'/app.js','utf8')).replaceAll('</script','<\\/script');
+const css=await readFile(out+'/app.css','utf8');
+const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Sentinel read-only investigation demo. Synthetic AWS and monitoring evidence, no credentials required."><meta name="theme-color" content="#7961ba"><title>Sentinel — Investigation Demo</title><style>body{margin:0}*{box-sizing:border-box}${css}</style></head><body><div id="root"></div><script>${js}</script></body></html>`;
+await writeFile(out+'/index.html',html);
+console.log('Built self-contained showcase: apps/showcase/dist/index.html');

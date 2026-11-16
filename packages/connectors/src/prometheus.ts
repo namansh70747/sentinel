@@ -12,6 +12,10 @@ export class PrometheusClient {
     url.pathname = `${url.pathname.replace(/\/$/, '')}${path}`;
     url.search = '';
     if (query) url.searchParams.set('query', query);
+    if (process.env.SENTINEL_EGRESS_ALLOWLIST) {
+     const { assertAllowed } = await import('./egress');
+     assertAllowed(url.origin);
+    }
     const response = await fetch(url, { headers: this.config.token ? { authorization: `Bearer ${this.config.token}` } : {}, signal: AbortSignal.timeout(this.config.timeoutMs ?? 10000), redirect: 'error' });
     if (!response.ok) throw new Error(`Prometheus request failed (${response.status})`);
     return response.json();
