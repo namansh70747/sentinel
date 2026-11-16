@@ -2,6 +2,10 @@
 
 ## Current execution — 2026-11-16
 
+GitHub `main` is `b61c859`. `npm test` with local Postgres and Temporal passed 93 tests and skipped 3. Typecheck passed. `TEST_LIVE_TELEMETRY=true npx vitest run tests/live/telemetry.live.test.ts` passed: one real `GET /fail` was visible in Prometheus, a Loki line with the same request and trace ids, and a Tempo trace retrieval. Severity is stored only when the matching scrape windows are covered. The rest of the master plan, including a fresh Grafana-evaluated alert in this commit and live AWS, is not finished.
+
+## Earlier same-day execution
+
 ## Latest monitoring milestone / usage-window handoff
 
 The repository-managed observability stack is running on its documented local ports. Older manually started monitoring containers were stopped and preserved with their data. The live telemetry test passed: an actual failed HTTP request appeared in Prometheus, a Loki log with matching request/trace IDs, Tempo search and trace retrieval. Actual Grafana evaluation delivered an authenticated webhook, created an incident and Temporal investigation, and persisted eight source outcomes. The live Grafana replay test passed after timestamp canonicalization was fixed; duplicate replay queued zero new incidents. Source health in these investigations includes real Prometheus/Loki/Tempo reads and explicitly simulated AWS observations.
