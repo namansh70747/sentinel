@@ -9,6 +9,10 @@
     "apps/*"
   ],
   "scripts": {
+    "dev:wait": "node scripts/dev/wait.mjs",
+    "scenario:healthy": "node scripts/scenarios/traffic.mjs healthy",
+    "scenario:degradation": "node scripts/scenarios/traffic.mjs degradation",
+    "scenario:recovery": "node scripts/scenarios/traffic.mjs recovery",
     "test": "vitest run",
     "test:aws": "tsx scripts/verify-ecs.ts",
     "db:provision": "node scripts/run.mjs provision",

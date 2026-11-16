@@ -34,4 +34,14 @@ export class PrometheusClient {
       return sample;
     });
   }
+  async queryMatrix(expression: string): Promise<{ metric: Record<string,string>; values: [number,string][] }[]> {
+    if (!expression.trim() || expression.length > 16384) throw new Error('Invalid query');
+    const body = await this.request('/api/v1/query', expression) as {status?:string;data?:{resultType?:string;result?:unknown[]}};
+    if(body.status !== 'success' || body.data?.resultType !== 'matrix' || !Array.isArray(body.data.result)) throw new Error('Invalid Prometheus matrix');
+    return body.data.result.map(raw => {
+      const row = raw as {metric:Record<string,string>;values:[number,string][]};
+      if(!row || !row.metric || typeof row.metric !== 'object' || !Array.isArray(row.values) || row.values.length > 10000 || row.values.some(value=>!Array.isArray(value)||value.length!==2||!Number.isFinite(value[0])||typeof value[1]!=='string'||!Number.isFinite(Number(value[1])))) throw new Error('Invalid Prometheus matrix sample');
+      return row;
+    });
+  }
 }

@@ -1,16 +1,17 @@
-import { createServer } from 'node:http';
 import { appendFileSync } from 'node:fs';
-let good = 0, bad = 0;
-const server = createServer((req, res) => {
- const line = JSON.stringify({ time: new Date().toISOString(), path: req.url, status: req.url === '/fail' ? 500 : 200 });
- try { appendFileSync('/var/log/workload.log', `${line}\n`); } catch { /* stdout is the fallback */ }
- console.log(line);
- if (req.url === '/metrics') {
-  res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' });
-  res.end(`# TYPE workload_requests_good counter\nworkload_requests_good ${good}\n# TYPE workload_requests_total counter\nworkload_requests_total ${good + bad}\n# TYPE workload_latency_ms gauge\nworkload_latency_ms 42\n`);
-  return;
- }
- if (req.url === '/fail') { bad += 1; res.writeHead(500); res.end('fail'); return; }
- good += 1; res.writeHead(200); res.end('ok');
+import { createWorkload } from './src/server.ts';
+import { startTracing } from './src/tracing.ts';
+const telemetry = startTracing(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT);
+const server = createWorkload({
+ tracer: telemetry?.tracer,
+ mode: process.env.SENTINEL_WORKLOAD_MODE === 'local' ? 'local' : 'production',
+ log(entry) {
+  const line = JSON.stringify(entry);
+  try { appendFileSync(process.env.WORKLOAD_LOG_FILE ?? '/var/log/workload.log', `${line}\n`); } catch { /* stdout remains available */ }
+  console.log(line);
+ },
 });
-server.listen(9464, '0.0.0.0');
+server.listen(Number(process.env.WORKLOAD_PORT ?? 9464), '0.0.0.0');
+for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => {
+ server.close(async () => { await telemetry?.shutdown(); process.exit(0); });
+});

@@ -7,16 +7,18 @@ export function IncidentView({ workspaceId, incidentId }: { workspaceId: string;
  const [error, setError] = useState('');
  useEffect(() => {
   let cancelled = false;
+  const controller = new AbortController();
   const load = async () => {
-   const response = await fetch(`/api/workspaces/${workspaceId}/incidents`, { cache: 'no-store' });
-   if (!response.ok) { if (!cancelled) setError('Unable to load investigations'); return; }
-   const body = await response.json() as Incident[];
-   const found = body.find(item => item.id === incidentId) ?? null;
-   if (!cancelled) { setRow(found); setError(found ? '' : 'Investigation not found'); }
+   try {
+    const response = await fetch(`/api/workspaces/${workspaceId}/incidents/${incidentId}`, { cache: 'no-store', signal: controller.signal });
+    if (!response.ok) { if (!cancelled) setError(response.status === 404 ? 'Investigation not found' : 'Unable to load investigation'); return; }
+    const body = await response.json() as Incident;
+    if (!cancelled) { setRow(body); setError(''); }
+   } catch { if (!cancelled) setError('Unable to load investigation'); }
   };
   void load();
   const id = setInterval(load, 5000);
-  return () => { cancelled = true; clearInterval(id); };
+  return () => { cancelled = true; controller.abort(); clearInterval(id); };
  }, [workspaceId, incidentId]);
  if (error) return <p role="status">{error}</p>;
  if (!row) return <p>Loading investigation.</p>;

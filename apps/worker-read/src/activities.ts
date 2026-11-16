@@ -1,4 +1,4 @@
-import { EcsReadClient, LokiClient, MOCK_SERVICE_ARN, MockEcsReadClient, PrometheusClient, TempoClient, collectSlo, publishNtfy, simulateCloudWatch, simulateCost, simulateDr } from '@sentinel/connectors';
+import { EcsReadClient, LokiClient, MOCK_SERVICE_ARN, MockEcsReadClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, simulateCloudWatch, simulateCost, simulateDr } from '@sentinel/connectors';
 import type { Provenance, SourceName, SourceOutcome, SourceResult } from '@sentinel/contracts';
 import { correlateEcsChange } from '@sentinel/engine';
 import { severity } from '@sentinel/policy';
@@ -24,6 +24,9 @@ export function createActivities(db: SentinelDatabase) {
  };
  const result = (source: SourceName, outcome: SourceOutcome, provenance: Provenance | null, summary: string): SourceResult => ({ source, outcome, provenance, summary });
  return {
+  async recordSourceFailure(input: InvestigationInput, source: SourceName) {
+   await write(input, source, 'unavailable', null, { reason: 'Evidence collection failed after retries.' });
+  },
   async collectPrometheus(input: InvestigationInput): Promise<SourceResult> {
    const mapping = await db.inWorkspace(input.workspaceId, async client => {
     const incident = await client.query('SELECT id, created_at FROM incidents WHERE workspace_id=$1 AND id=$2 AND service_id=$3', [input.workspaceId, input.incidentId, input.serviceId]);
@@ -37,13 +40,19 @@ export function createActivities(db: SentinelDatabase) {
    const client = new PrometheusClient({ url: process.env.PROMETHEUS_URL, token: process.env.PROMETHEUS_TOKEN, timeoutMs: 5000 });
    const sample = await collectSlo(client, { availabilityTarget: mapping.availability_target, latencyTargetMs: mapping.latency_target_ms, goodQuery: mapping.good_query, totalQuery: mapping.total_query, latencyQuery: mapping.latency_query });
    let covered = false;
+   let coverage: unknown = null;
    try {
-    const rows = await client.query(process.env.SENTINEL_COVERAGE_QUERY || '(time() - max(workload_process_start_seconds))');
-    covered = Number(rows[0]?.value[1] ?? 0) >= 6 * 3600;
+    const end = Date.now() / 1000;
+    const rows = await client.queryMatrix(process.env.SENTINEL_COVERAGE_QUERY || 'up{job="workload"}[6h]');
+    // Multiple series require an explicit service mapping; never combine unrelated targets.
+    if (rows.length === 1) {
+     coverage = [300,1800,3600,21600].map(seconds=>({ windowSeconds: seconds, ...assessCoverage(rows[0].values,end-seconds,end) }));
+     covered = (coverage as {covered:boolean}[]).every(window=>window.covered);
+    }
    } catch { covered = false; }
    const sev = severity(sample);
    const outcome = covered ? 'ok' : 'uncovered';
-   await write(input, 'prometheus', outcome, 'live', { ...sample, windowCovered: covered }, { severity: sev, observedAt: new Date().toISOString(), windowCovered: covered });
+   await write(input, 'prometheus', outcome, 'live', { ...sample, windowCovered: covered, coverage }, { severity: sev, observedAt: new Date().toISOString(), windowCovered: covered });
    return result('prometheus', outcome, 'live', `Prometheus SLI evaluated as ${sev}. No production action proposed.`);
   },
   async collectEcs(input: InvestigationInput): Promise<SourceResult> {

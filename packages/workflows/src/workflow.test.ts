@@ -19,6 +19,7 @@ describe.skipIf(process.env.TEST_TEMPORAL !== 'true')('durable read-only investi
    collectLoki: async () => skip(), collectTempo: async () => skip(), collectGithub: async () => skip(),
    collectCloudwatch: async () => skip(), collectCost: async () => skip(), collectDr: async () => skip(),
    recordInvestigation: async (...args: unknown[]) => { recorded.push(args); },
+   recordSourceFailure: async () => {},
    notifyNtfy: async () => {},
   } });
   const input={workspaceId:'workspace',incidentId:'incident',serviceId:'service'};
@@ -26,6 +27,53 @@ describe.skipIf(process.env.TEST_TEMPORAL !== 'true')('durable read-only investi
   expect(result.status).toBe('escalated');
   expect(result.summary).toContain('prometheus down');
   expect(calls).toEqual(['ecs']);
+  expect(recorded).toHaveLength(1);
+ },120000);
+ it('finishes and records an investigation when an optional collector fails', async () => {
+  const recorded: unknown[] = [], calls: string[] = [], failures: string[] = [];
+  let ecsAttempts = 0;
+  const worker = await Worker.create({ connection: env.nativeConnection, taskQueue:'sentinel-optional-test', workflowsPath:fileURLToPath(new URL('./index.ts',import.meta.url)), activities:{
+   collectPrometheus: async () => ({source:'prometheus',outcome:'ok',provenance:'live',summary:'metrics available'}),
+   collectEcs: async () => { ecsAttempts += 1; throw new Error('ECS unavailable'); },
+   collectLoki: async () => { calls.push('loki'); return skip(); },
+   collectTempo: async () => skip(), collectGithub: async () => skip(), collectCloudwatch: async () => { calls.push(`cloudwatch-after-${ecsAttempts}`); return skip(); }, collectCost: async () => skip(), collectDr: async () => skip(),
+   recordInvestigation: async (...args: unknown[]) => { recorded.push(args); }, recordSourceFailure: async (_input: unknown, source: string) => { failures.push(source); }, notifyNtfy: async () => {},
+  } });
+  const result = await worker.runUntil(env.client.workflow.execute(investigateIncident,{taskQueue:'sentinel-optional-test',workflowId:'test-optional-failure',args:[{workspaceId:'workspace',incidentId:'incident',serviceId:'service'}]}));
+  expect(result.status).toBe('advised');
+  expect(calls).toEqual(['loki', 'cloudwatch-after-3']);
+  expect(failures).toEqual(['ecs']);
+  expect(recorded).toHaveLength(1);
+ },120000);
+ it('runs optional collectors with a maximum concurrency of four', async () => {
+  let active = 0, maximumActive = 0;
+  const collect = async (): Promise<SourceResult> => {
+   active += 1;
+   maximumActive = Math.max(maximumActive, active);
+   await new Promise(resolve => setTimeout(resolve, 25));
+   active -= 1;
+   return skip();
+  };
+  const worker = await Worker.create({ connection: env.nativeConnection, taskQueue:'sentinel-concurrency-test', workflowsPath:fileURLToPath(new URL('./index.ts',import.meta.url)), activities:{
+   collectPrometheus: async () => ({source:'prometheus',outcome:'ok',provenance:'live',summary:'metrics available'}),
+   collectEcs: collect, collectLoki: collect, collectTempo: collect, collectGithub: collect,
+   collectCloudwatch: collect, collectCost: collect, collectDr: collect,
+   recordInvestigation: async () => {}, recordSourceFailure: async () => {}, notifyNtfy: async () => {},
+  } });
+  await worker.runUntil(env.client.workflow.execute(investigateIncident,{taskQueue:'sentinel-concurrency-test',workflowId:'test-bounded-concurrency',args:[{workspaceId:'workspace',incidentId:'incident',serviceId:'service'}]}));
+  expect(maximumActive).toBe(4);
+ },120000);
+ it('does not fail a persisted investigation when notification delivery fails', async () => {
+  const recorded: unknown[] = [];
+  const worker = await Worker.create({ connection: env.nativeConnection, taskQueue:'sentinel-notification-test', workflowsPath:fileURLToPath(new URL('./index.ts',import.meta.url)), activities:{
+   collectPrometheus: async () => ({source:'prometheus',outcome:'ok',provenance:'live',summary:'metrics available'}),
+   collectEcs: skip, collectLoki: skip, collectTempo: skip, collectGithub: skip,
+   collectCloudwatch: skip, collectCost: skip, collectDr: skip,
+   recordInvestigation: async (...args: unknown[]) => { recorded.push(args); }, recordSourceFailure: async () => {},
+   notifyNtfy: async () => { throw new Error('ntfy unavailable'); },
+  } });
+  const result = await worker.runUntil(env.client.workflow.execute(investigateIncident,{taskQueue:'sentinel-notification-test',workflowId:'test-notification-failure',args:[{workspaceId:'workspace',incidentId:'incident',serviceId:'service'}]}));
+  expect(result.status).toBe('advised');
   expect(recorded).toHaveLength(1);
  },120000);
 });

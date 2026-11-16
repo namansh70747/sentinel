@@ -1,5 +1,5 @@
 local.file_match "workload" {
-  path_targets = [{ __path__ = "/var/log/workload.log" }]
+  path_targets = [{ __path__ = "/var/log/workload.log", job = "workload", service_name = "workload" }]
 }
 loki.source.file "workload" {
   targets    = local.file_match.workload.targets
@@ -9,8 +9,8 @@ loki.write "local" {
   endpoint { url = "http://loki:3100/loki/api/v1/push" }
 }
 otelcol.receiver.otlp "traces" {
-  grpc {}
-  http {}
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
   output { traces = [otelcol.exporter.otlphttp.tempo.input] }
 }
 otelcol.exporter.otlphttp "tempo" {

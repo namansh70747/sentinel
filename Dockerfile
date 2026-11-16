@@ -3,6 +3,11 @@ WORKDIR /app
 COPY . .
 RUN npm ci
 
+FROM base AS workload
+ENV SENTINEL_WORKLOAD_MODE=local
+EXPOSE 9464
+CMD ["node", "--import", "tsx", "apps/workload/server.mjs"]
+
 FROM base AS api
 ENV SENTINEL_PORT=8787
 EXPOSE 8787

@@ -40,6 +40,19 @@ describe.skipIf(!base || !process.env.TEST_DATABASE_URL)('authenticated workspac
   const listed=await (await fetch(incidents,{headers:headers(0)})).json();
   expect(listed[0].id).toBe(pending.id);
   expect(listed[0].observed_severity).toBeNull();
+  const detailUrl=`${incidents}/${pending.id}`;
+  expect((await fetch(detailUrl)).status).toBe(401);
+  expect((await fetch(detailUrl,{headers:headers(1)})).status).toBe(404);
+  expect((await fetch(`${incidents}/${randomUUID()}`,{headers:headers(0)})).status).toBe(404);
+  const detailResponse=await fetch(detailUrl,{headers:headers(0)});
+  expect(detailResponse.status).toBe(200);
+  expect(await detailResponse.json()).toMatchObject({id:pending.id,title:'Investigate availability',sources:[]});
+  // The detail route must not depend on the list's first 100 entries.
+  await db.inWorkspace(workspace.workspace_id,async client=>{
+   for(let index=0;index<101;index++) await client.query("INSERT INTO incidents(workspace_id,id,service_id,title,state,severity) VALUES($1,$2,$3,'newer incident','investigating','sev4')",[workspace.workspace_id,randomUUID(),rows[0].id]);
+  });
+  expect((await (await fetch(incidents,{headers:headers(0)})).json()).some((row:{id:string})=>row.id===pending.id)).toBe(false);
+  expect((await (await fetch(detailUrl,{headers:headers(0)})).json()).id).toBe(pending.id);
   const jobs=await db.pool.query('SELECT incident_id FROM investigation_jobs WHERE incident_id=$1',[pending.id]);
   expect(jobs.rowCount).toBe(1);
   const auditUrl=`${base}/api/workspaces/${workspace.workspace_id}/audit`;

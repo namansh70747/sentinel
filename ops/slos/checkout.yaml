@@ -1,0 +1,7 @@
+# Template values for the local checkout service's SLO configuration.
+availabilityTarget: 0.999
+latencyTargetMs: 300
+goodQuery: 'sum(increase(workload_requests_good[{window}]))'
+totalQuery: 'sum(increase(workload_requests_total[{window}]))'
+# Histogram stores seconds; Sentinel evaluates milliseconds.
+latencyQuery: '1000 * histogram_quantile(0.99, sum by (le) (rate(workload_request_duration_seconds_bucket[10m])))'
