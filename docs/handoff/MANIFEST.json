@@ -1,0 +1,7 @@
+{
+  "source_commit": "034124f9c05b0e668e11fe2661530effcfcefa7c",
+  "base_commit": "6bd66c075577bf8f4fe499df295d8e6d4cf733c8",
+  "branch": "demo/credential-free-showcase",
+  "commits": 3,
+  "data_source": "simulated"
+}

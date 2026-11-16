@@ -1,0 +1,55 @@
+SENTINEL — COMPLETE HANDOFF
+
+1. SHOW THE DEMO IMMEDIATELY
+Open offline/Sentinel-demo.html in Chrome, Edge or Firefox.
+All code and styles are embedded. No installation or internet is needed.
+Browser history storage may be limited for local files; report export still works.
+All AWS/monitoring observations and connection tests are simulated.
+
+2. RUN THE FULL UPDATED SOURCE
+Install Node.js 22+ (24 recommended). Open a terminal inside source/:
+  npm ci
+  npm run demo:showcase
+Then open http://localhost:3011.
+For the original Next.js console: npm run dev:console
+Showcase route: http://localhost:3010/demo/showcase
+No AWS credentials or .env file is required for the showcase.
+
+3. PUSH THE THREE COMMITS FROM ANOTHER LAPTOP (RECOMMENDED)
+Install Git and GitHub CLI. Log in as an account with write access:
+  gh auth login --hostname github.com --git-protocol https --web --scopes repo
+  gh auth setup-git
+
+Clone the real repo into a NEW directory, outside this ZIP's source/ folder:
+  git clone https://github.com/namansh70747/sentinel.git sentinel-publish
+  cd sentinel-publish
+
+Replace /FULL/PATH below with the extracted ZIP's absolute folder path.
+Keep the quotes if the path has spaces. Forward slashes also work in Windows Git Bash.
+  git fetch "/FULL/PATH/sentinel-handoff/transfer/sentinel-changes.bundle" demo/credential-free-showcase:demo/credential-free-showcase
+  git switch demo/credential-free-showcase
+  git push -u origin demo/credential-free-showcase
+
+Create the PR:
+  gh pr create --repo namansh70747/sentinel --base main --head demo/credential-free-showcase --title "Add simulated Sentinel investigation prototype" --body-file "/FULL/PATH/sentinel-handoff/transfer/PR-DESCRIPTION.md"
+
+Once CI and required reviews pass, merge through GitHub or run:
+  gh pr merge --repo namansh70747/sentinel --squash
+
+Do not force-push or overwrite main. If the target branch already exists,
+inspect it before importing/pushing. The bundle requires the existing upstream
+base commit, which the full clone supplies.
+
+4. WHAT IS INCLUDED
+source/                    Complete updated tracked repository, no .git metadata.
+offline/Sentinel-demo.html Self-contained presentation prototype.
+transfer/*.bundle          Three commits for import into a fresh clone.
+transfer/*.patch           Alternative git-am patch for the same three commits.
+transfer/PR-DESCRIPTION.md Ready-to-use PR body.
+
+Validation: 45 tests passed, 10 skipped; TypeScript, standalone build and
+Next.js build passed. Browser interaction testing and live integrations
+remain unverified. See source/docs/SHOWCASE.md for the demo script and scope.
+
+No login tokens, actual AWS credentials, node_modules, or local auth config
+are included. DEMO_ONLY placeholders and tracked .env.example are intentional.
