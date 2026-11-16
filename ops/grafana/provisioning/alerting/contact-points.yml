@@ -6,7 +6,7 @@ contactPoints:
       - uid: sentinel
         type: webhook
         settings:
-          url: http://host.docker.internal:3023/api/webhooks/grafana/${SENTINEL_GRAFANA_ENDPOINT_ID}
+          url: ${SENTINEL_GRAFANA_WEBHOOK_BASE_URL}/api/webhooks/grafana/${SENTINEL_GRAFANA_ENDPOINT_ID}
           httpMethod: POST
           headers:
             x-sentinel-secret: ${SENTINEL_WEBHOOK_SECRET}

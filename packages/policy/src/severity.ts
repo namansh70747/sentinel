@@ -23,6 +23,24 @@ export function severity(sample: SliWindows): Severity {
   return "sev4";
 }
 
+export interface SeverityCoverage {
+  fiveMinutes: boolean;
+  tenMinutes: boolean;
+  thirtyMinutes: boolean;
+  oneHour: boolean;
+  sixHours: boolean;
+}
+
+/** Null means insufficient coverage, never an assertion of service health. */
+export function qualifiedSeverity(sample: SliWindows, coverage: SeverityCoverage): Severity | null {
+  if (sample.dataLoss) return 'sev1';
+  if (coverage.fiveMinutes && sample.total5m > 0 && sample.good5m === 0) return 'sev1';
+  if (coverage.fiveMinutes && coverage.oneHour && burn(sample.good5m,sample.total5m,sample.availabilitySlo)>=14.4 && burn(sample.good1h,sample.total1h,sample.availabilitySlo)>=14.4) return 'sev1';
+  if (coverage.thirtyMinutes && coverage.sixHours && burn(sample.good30m,sample.total30m,sample.availabilitySlo)>=6 && burn(sample.good6h,sample.total6h,sample.availabilitySlo)>=6) return 'sev2';
+  if (coverage.tenMinutes && sample.p99_10m_ms>sample.latencySloMs) return 'sev3';
+  return Object.values(coverage).every(Boolean) ? 'sev4' : null;
+}
+
 export function availability(good: number, total: number): number {
   if (total <= 0) return 1;
   return good / total;

@@ -1,15 +1,24 @@
 apiVersion: 1
+# These three local provisioned definitions are owned by this file.
+# Recreate them with stable UIDs when upgrading the pre-UID local configuration.
+deleteDatasources:
+  - {name: Prometheus, orgId: 1}
+  - {name: Loki, orgId: 1}
+  - {name: Tempo, orgId: 1}
 datasources:
   - name: Prometheus
+    uid: sentinel-prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
   - name: Loki
+    uid: sentinel-loki
     type: loki
     access: proxy
     url: http://loki:3100
   - name: Tempo
+    uid: sentinel-tempo
     type: tempo
     access: proxy
     url: http://tempo:3200

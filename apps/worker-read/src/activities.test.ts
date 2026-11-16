@@ -23,7 +23,7 @@ describe.skipIf(!url)('read-worker persistence', () => {
   const row=await db.inWorkspace(input.workspaceId,async c=>(await c.query('SELECT state,severity FROM incidents WHERE id=$1',[input.incidentId])).rows[0]);
   expect(row).toEqual({state:'escalated',severity:'sev4'});
  });
- it('stores prometheus severity and does not duplicate the row on retry',async()=>{
+ it('keeps insufficiently covered severity unqualified and does not duplicate evidence on retry',async()=>{
   const current={...input,incidentId:randomUUID()};
   await db.inWorkspace(input.workspaceId,async client=>{
    await client.query("INSERT INTO incidents(workspace_id,id,service_id,title,state,severity) VALUES($1,$2,$3,'SLI test','investigating','sev4')",[current.workspaceId,current.incidentId,current.serviceId]);
@@ -37,20 +37,20 @@ describe.skipIf(!url)('read-worker persistence', () => {
   vi.stubGlobal('fetch',fetcher);
   try {
    const first=await activities.collectPrometheus(current);
-   expect(first.summary).toContain('sev1');
+   expect(first.summary).toContain('not yet qualified');
    expect(first.outcome).toBe('uncovered');
    await activities.collectPrometheus(current);
    await activities.collectEcs(current);
    const evidence=await db.inWorkspace(current.workspaceId,async client=>(await client.query('SELECT source,severity,provenance,window_covered FROM incident_evidence WHERE incident_id=$1 ORDER BY source',[current.incidentId])).rows);
    expect(evidence).toEqual([
     {source:'ecs',severity:'sev4',provenance:'simulated',window_covered:null},
-    {source:'prometheus',severity:'sev1',provenance:'live',window_covered:false},
+    {source:'prometheus',severity:'sev4',provenance:'live',window_covered:false},
    ]);
    const hypothesis=await db.inWorkspace(current.workspaceId,async client=>(await client.query('SELECT hypothesis FROM change_hypotheses WHERE incident_id=$1',[current.incidentId])).rows[0].hypothesis);
    expect(hypothesis.status).not.toBe('candidate');
    await activities.recordInvestigation(current,{status:'advised',summary:first.summary});
    const incident=await db.inWorkspace(current.workspaceId,async client=>(await client.query('SELECT state,severity FROM incidents WHERE id=$1',[current.incidentId])).rows[0]);
-   expect(incident).toEqual({state:'advised',severity:'sev1'});
+   expect(incident).toEqual({state:'advised',severity:'sev4'});
   } finally {vi.unstubAllGlobals();vi.unstubAllEnvs();}
  });
  it('records ecs as not-configured when the mode is off',async()=>{

@@ -3,6 +3,8 @@ node_modules
 **/.next
 .git
 .env
+.local
+.playwright-cli
 *.log
 .env.*
 !.env.example

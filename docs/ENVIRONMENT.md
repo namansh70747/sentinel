@@ -3,6 +3,8 @@
 Run commands from the repository root. Node 22 or newer and Docker Compose are required.
 Set unique local database, Grafana and Keycloak passwords in the ignored `.env` file using `.env.example` as the reference. Never commit that file.
 
+`npm run dev:prepare` preserves existing environment credentials and generates missing local passwords under ignored `.local/compose.env`, with private file permissions. For existing database volumes, retain their original database passwords. Use `--env-file .local/compose.env` with the Compose commands below. `npm run dev:observe` starts the observability services from this checkout using those local inputs. Stop conflicting manually started development containers before taking over the same loopback ports; their data can remain for recovery.
+
 Validate the combined configuration before startup:
 
 ```sh

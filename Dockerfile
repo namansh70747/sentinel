@@ -3,7 +3,12 @@ WORKDIR /app
 COPY . .
 RUN npm ci
 
-FROM base AS workload
+FROM node:24-bookworm-slim AS workload
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/workload/package.json ./apps/workload/package.json
+RUN npm ci --workspace=@sentinel/workload --include-workspace-root=false --omit=dev
+COPY apps/workload ./apps/workload
 ENV SENTINEL_WORKLOAD_MODE=local
 EXPOSE 9464
 CMD ["node", "--import", "tsx", "apps/workload/server.mjs"]

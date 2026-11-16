@@ -1,7 +1,7 @@
 import { EcsReadClient, LokiClient, MOCK_SERVICE_ARN, MockEcsReadClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, simulateCloudWatch, simulateCost, simulateDr } from '@sentinel/connectors';
 import type { Provenance, SourceName, SourceOutcome, SourceResult } from '@sentinel/contracts';
 import { correlateEcsChange } from '@sentinel/engine';
-import { severity } from '@sentinel/policy';
+import { qualifiedSeverity } from '@sentinel/policy';
 import type { InvestigationInput, InvestigationResult } from '@sentinel/workflows';
 import { SentinelDatabase } from '@sentinel/db';
 
@@ -40,20 +40,21 @@ export function createActivities(db: SentinelDatabase) {
    const client = new PrometheusClient({ url: process.env.PROMETHEUS_URL, token: process.env.PROMETHEUS_TOKEN, timeoutMs: 5000 });
    const sample = await collectSlo(client, { availabilityTarget: mapping.availability_target, latencyTargetMs: mapping.latency_target_ms, goodQuery: mapping.good_query, totalQuery: mapping.total_query, latencyQuery: mapping.latency_query });
    let covered = false;
-   let coverage: unknown = null;
+   let coverage: Array<ReturnType<typeof assessCoverage> & {windowSeconds:number}> = [];
    try {
     const end = Date.now() / 1000;
     const rows = await client.queryMatrix(process.env.SENTINEL_COVERAGE_QUERY || 'up{job="workload"}[6h]');
     // Multiple series require an explicit service mapping; never combine unrelated targets.
     if (rows.length === 1) {
-     coverage = [300,1800,3600,21600].map(seconds=>({ windowSeconds: seconds, ...assessCoverage(rows[0].values,end-seconds,end) }));
-     covered = (coverage as {covered:boolean}[]).every(window=>window.covered);
+     coverage = [300,600,1800,3600,21600].map(seconds=>({ windowSeconds: seconds, ...assessCoverage(rows[0].values,end-seconds,end) }));
+     covered = coverage.every(window=>window.covered);
     }
    } catch { covered = false; }
-   const sev = severity(sample);
+   const qualifies=(seconds:number)=>coverage.find(window=>window.windowSeconds===seconds)?.covered??false;
+   const sev = qualifiedSeverity(sample,{fiveMinutes:qualifies(300),tenMinutes:qualifies(600),thirtyMinutes:qualifies(1800),oneHour:qualifies(3600),sixHours:qualifies(21600)});
    const outcome = covered ? 'ok' : 'uncovered';
-   await write(input, 'prometheus', outcome, 'live', { ...sample, windowCovered: covered, coverage }, { severity: sev, observedAt: new Date().toISOString(), windowCovered: covered });
-   return result('prometheus', outcome, 'live', `Prometheus SLI evaluated as ${sev}. No production action proposed.`);
+   await write(input, 'prometheus', outcome, 'live', { ...sample, windowCovered: covered, coverage, severityQualified: sev!==null }, { severity: sev??'sev4', observedAt: new Date().toISOString(), windowCovered: covered });
+   return result('prometheus', outcome, 'live', sev ? `Prometheus SLI evaluated as ${sev} from qualifying windows. No production action proposed.` : 'Prometheus SLI coverage is incomplete. Severity is not yet qualified.');
   },
   async collectEcs(input: InvestigationInput): Promise<SourceResult> {
    let mode: 'off' | 'simulated' | 'live';
@@ -152,8 +153,8 @@ export function createActivities(db: SentinelDatabase) {
   },
   async recordInvestigation(input: InvestigationInput, outcome: InvestigationResult) {
    await db.inWorkspace(input.workspaceId, async client => {
-    const prom = (await client.query("SELECT severity, outcome FROM incident_evidence WHERE workspace_id=$1 AND incident_id=$2 AND source='prometheus'", [input.workspaceId, input.incidentId])).rows[0];
-    const severity = prom && (prom.outcome === 'ok' || prom.outcome === 'uncovered') ? prom.severity : null;
+    const prom = (await client.query("SELECT severity, outcome, detail FROM incident_evidence WHERE workspace_id=$1 AND incident_id=$2 AND source='prometheus'", [input.workspaceId, input.incidentId])).rows[0];
+    const severity = prom && (prom.outcome === 'ok' || (prom.outcome === 'uncovered' && prom.detail?.severityQualified===true)) ? prom.severity : null;
     const updated = await client.query('UPDATE incidents SET state=$1, severity=COALESCE($2, severity) WHERE workspace_id=$3 AND id=$4 AND service_id=$5 AND state=$6 RETURNING id', [outcome.status, severity, input.workspaceId, input.incidentId, input.serviceId, 'investigating']);
     if (!updated.rowCount) {
      const existing = await client.query('SELECT state FROM incidents WHERE workspace_id=$1 AND id=$2 AND service_id=$3', [input.workspaceId, input.incidentId, input.serviceId]);

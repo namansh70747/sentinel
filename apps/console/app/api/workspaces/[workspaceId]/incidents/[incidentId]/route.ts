@@ -8,7 +8,7 @@ export async function GET(_: Request, context: { params: Promise<{ workspaceId: 
  if (!isUuid(incidentId)) return Response.json({error:'Invalid incident identifier'},{status:400});
  const incident = await getDatabase().inWorkspace(workspaceId, async client => {
   const row = (await client.query(`SELECT i.*, j.dispatched_at,
-   (SELECT e.severity FROM incident_evidence e WHERE e.workspace_id=i.workspace_id AND e.incident_id=i.id AND e.source='prometheus' AND e.outcome IN ('ok','uncovered')) AS observed_severity
+   (SELECT e.severity FROM incident_evidence e WHERE e.workspace_id=i.workspace_id AND e.incident_id=i.id AND e.source='prometheus' AND (e.outcome='ok' OR (e.outcome='uncovered' AND e.detail->>'severityQualified'='true'))) AS observed_severity
    FROM incidents i LEFT JOIN investigation_jobs j ON j.workspace_id=i.workspace_id AND j.incident_id=i.id
    WHERE i.workspace_id=$1 AND i.id=$2`, [workspaceId,incidentId])).rows[0];
   if (!row) return null;

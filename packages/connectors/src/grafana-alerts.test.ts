@@ -11,3 +11,9 @@ it('rejects malformed and oversized alert batches',()=>{
  expect(()=>normalizeGrafanaAlerts({alerts:[{}]})).toThrow();
  expect(()=>normalizeGrafanaAlerts({alerts:Array(101).fill({})})).toThrow();
 });
+it('deduplicates the same alert instant across equivalent timestamp encodings',()=>{
+ const signal={status:'firing',fingerprint:'same-alert',startsAt:'2026-11-16T10:00:00Z',labels:{alertname:'Checkout request failures'}};
+ const key=normalizeGrafanaAlerts({alerts:[signal]})[0].dedupeKey;
+ expect(normalizeGrafanaAlerts({alerts:[{...signal,startsAt:'2026-11-16T10:00:00.000Z'}]})[0].dedupeKey).toBe(key);
+ expect(normalizeGrafanaAlerts({alerts:[{...signal,startsAt:'2026-11-16T15:30:00+05:30'}]})[0].dedupeKey).toBe(key);
+});
