@@ -1,4 +1,11 @@
-# Credential-free presentation demo
+# Local product and credential-free demo
+
+For the Docker product, run `npm ci`, `npm run dev:prepare`, `npm run dev:doctor`,
+then `npm run dev:up` and `npm run dev:import-local`. Open
+[the product](http://localhost:3010). Generated owner credentials stay in
+`.local/keycloak/owner-password`; provider tokens stay encrypted in PostgreSQL.
+See [the integration execution ledger](docs/NON_AWS_INTEGRATIONS.md) for verified
+capabilities and remaining work.
 
 Run `npm ci` then `npm run demo:showcase`, and open http://localhost:3011.
 Four clearly labelled synthetic scenarios work without AWS credentials or backend services.
@@ -319,8 +326,9 @@ Root runtime commands load `.env` automatically.
 | `OIDC_ISSUER` | Organization identity-provider URL. |
 | `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | Credentials for Sentinel's registered login application. |
 | `SENTINEL_PUBLIC_URL` | Exact website origin, without a trailing slash. |
-| `PROMETHEUS_URL` / `PROMETHEUS_TOKEN` | Metrics endpoint and optional bearer token. |
-| `SENTINEL_CONFIG_WORKSPACE_ID` | The one workspace allowed to use the server-scoped provider credentials. Copy its UUID from the dashboard. |
+| `SENTINEL_CONNECTOR_KEY_FILE` | Private 32-byte encryption key file; mounted as a Docker secret for the product. |
+| `PROMETHEUS_URL` / `PROMETHEUS_TOKEN` | Legacy compatibility settings. The product worker uses workspace connections and service bindings instead. |
+| `SENTINEL_CONFIG_WORKSPACE_ID` | Local Grafana bootstrap workspace. It does not grant global provider credentials to the product worker. |
 | `TEMPORAL_ADDRESS` | Address of the Temporal server. |
 | `SENTINEL_DATABASE_ADMIN_PASSWORD` | Administrator password for the local durable Compose stack. |
 | `SENTINEL_DATABASE_PASSWORD` | Separate runtime-role password for that stack. |
@@ -336,10 +344,19 @@ Remote deployment requires HTTPS. Use different, URL-safe local database passwor
 For the durable local development stack:
 
 ```sh
-docker compose -f compose.durable.yml up --build
+npm run dev:prepare
+npm run dev:doctor
+npm run dev:up
+npm run dev:import-local
 ```
 
-This configuration includes Postgres, Temporal, migrations, console and the read worker. It has been configuration-validated; a full container deployment has not yet been verified. Its Temporal development server is not a production Temporal deployment. Stop an existing console process before starting another on port 3010.
+This combines the durable, telemetry and local Compose files under project
+`sentinel`: Postgres, migrations, Temporal, console, read and communication workers,
+Keycloak, workload, Prometheus, Loki, Tempo, Alloy, Grafana and authenticated ntfy.
+The core stack and actual telemetry ingestion have passed local checks. Temporal's
+development server remains a local component. `dev:doctor` identifies port
+conflicts; `dev:stop` preserves volumes. Local integration checks use
+`npm run test:integrations`; `npm run test:ntfy` confirms actual local receipt.
 
 For host processes instead of the container application, configure the database/server addresses, then run:
 

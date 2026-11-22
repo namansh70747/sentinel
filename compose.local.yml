@@ -1,5 +1,16 @@
 # Use with compose.durable.yml and compose.observe.yml, in that order.
 services:
+  worker-communication:
+    build: {context: ., target: worker-communication}
+    networks: [default, observe]
+    environment:
+      DATABASE_URL: postgres://sentinel_app:${SENTINEL_DATABASE_PASSWORD}@postgres:5432/sentinel
+      SENTINEL_CONNECTOR_KEY_FILE: /run/secrets/connector_key
+    secrets: [connector_key]
+    restart: on-failure
+    stop_grace_period: 40s
+    depends_on:
+      migrate: {condition: service_completed_successfully}
   grafana:
     environment:
       SENTINEL_GRAFANA_WEBHOOK_BASE_URL: http://console:3010

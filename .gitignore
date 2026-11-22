@@ -9,6 +9,7 @@ coverage
 .env.local
 .local/
 .playwright-cli/
+output/playwright/
 *.log
 .DS_Store
 data/*.json

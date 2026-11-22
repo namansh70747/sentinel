@@ -60,6 +60,13 @@ services:
   ntfy:
     image: binwiederhier/ntfy:v2.14.0
     command: ["serve"]
+    environment:
+      NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_ENABLE_LOGIN: "true"
+      NTFY_ENABLE_SIGNUP: "false"
+    volumes: ["ntfy-data:/var/lib/ntfy"]
     ports: ["127.0.0.1:8091:80"]
     networks: [observe]
   keycloak:
@@ -83,3 +90,4 @@ volumes:
   alloy-data:
   grafana-data:
   keycloak-data:
+  ntfy-data:

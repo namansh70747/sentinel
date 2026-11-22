@@ -17,7 +17,11 @@ export function localConnectorOrigins(){return (process.env.SENTINEL_CONNECTOR_A
 export class ConnectorHttpClient {
  private readonly origins:Set<string>;private readonly limit:number;private readonly timeout:number;
  constructor(private readonly options:Options={}){
-  this.origins=new Set(options.allowedPrivateOrigins??localConnectorOrigins());
+  this.origins=new Set((options.allowedPrivateOrigins??localConnectorOrigins()).map(raw=>{
+   const url=new URL(raw);
+   if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.pathname!=='/'||url.search||url.hash)throw new Error('Approved connector endpoints must be origins');
+   return url.origin;
+  }));
   this.limit=options.maxResponseBytes??2*1024*1024;this.timeout=options.timeoutMs??10000;
   if(!Number.isInteger(this.limit)||this.limit<1||this.limit>2*1024*1024||!Number.isInteger(this.timeout)||this.timeout<1||this.timeout>30000)throw new Error('Invalid connector request bounds');
   if(options.deadlineAt!==undefined&&!Number.isFinite(options.deadlineAt))throw new Error('Invalid connector deadline');

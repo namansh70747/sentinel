@@ -11,8 +11,12 @@ jobs, service mappings and production telemetry migration. The next checkpoint
 adds version-frozen refresh runs, immutable evidence, terminal failure handling,
 Temporal reconciliation and refresh UI. Actual local Grafana delivery and duplicate
 suppression passed; a browser-requested refresh persisted all eight source outcomes.
-AWS remains simulated. GitHub reconciliation, communication workers and the
-optional infrastructure bundle remain unfinished.
+AWS remains simulated. A subsequent communication checkpoint adds the separate
+worker, approved subscription APIs/UI, outgoing ledger and authenticated local
+ntfy with confirmed receipt. Full runtime-database suite: 119 passed/12 skipped;
+local integration command: 17 passed. GitHub reconciliation/Issues and the
+optional infrastructure bundle remain unfinished. Slack is implemented but awaits
+an explicitly approved hosted test destination.
 
 ## Current execution — 2026-11-16
 

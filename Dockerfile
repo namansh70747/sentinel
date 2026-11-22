@@ -15,6 +15,7 @@ COPY apps/api/package.json ./apps/api/package.json
 COPY apps/cli/package.json ./apps/cli/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY apps/worker-read/package.json ./apps/worker-read/package.json
+COPY apps/worker-communication/package.json ./apps/worker-communication/package.json
 COPY apps/workload/package.json ./apps/workload/package.json
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
@@ -39,6 +40,9 @@ CMD ["sh", "-c", "npm run db:migrate && npm run db:provision"]
 
 FROM base AS worker-read
 CMD ["node", "--import", "tsx", "apps/worker-read/src/main.ts"]
+
+FROM base AS worker-communication
+CMD ["node", "--import", "tsx", "apps/worker-communication/src/main.ts"]
 
 FROM base AS console-build
 ARG NEXT_PUBLIC_API_URL=http://localhost:8787

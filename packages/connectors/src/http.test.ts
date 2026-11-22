@@ -43,3 +43,8 @@ it('shares a collection deadline across sequential reads',async()=>{
  const client=new ConnectorHttpClient({allowedPrivateOrigins:[url],deadlineAt:Date.now()-1});
  await expect(client.get(url)).rejects.toMatchObject({code:'unavailable'});
 });
+it('canonicalizes approved origins before comparing normalized provider URLs',async()=>{
+ const url=await serve((_req,response)=>response.end('{"ok":true}'));
+ const client=new ConnectorHttpClient({allowedPrivateOrigins:[url+'/']});
+ expect(await client.json(url)).toEqual({ok:true});
+});

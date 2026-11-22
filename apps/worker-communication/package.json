@@ -1,0 +1,1 @@
+{"name":"@sentinel/worker-communication","version":"0.1.0","private":true,"type":"module","dependencies":{"@sentinel/db":"*","@sentinel/connectors":"*","tsx":"^4.20.6"}}

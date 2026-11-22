@@ -73,6 +73,20 @@ export class InvestigationRepository {
    if(status==='advised'&&!['ok','uncovered'].includes(prom?.outcome)){status='escalated';summary='Required Prometheus evidence is unavailable; investigation escalated.';}
   }
   const updated=await client.query("UPDATE investigation_runs SET status=$1,summary=$2,finished_at=now() WHERE workspace_id=$3 AND id=$4 AND incident_id=$5 AND service_id=$6 AND status IN ('queued','running') RETURNING id",[status,summary.slice(0,2000),input.workspaceId,input.runId,input.incidentId,input.serviceId]);
-  if(updated.rowCount)await this.db.appendAuditInTransaction(client,input.workspaceId,'read-worker','investigation.completed',{runId:input.runId,incidentId:input.incidentId,status});
+  if(updated.rowCount){
+   await this.db.appendAuditInTransaction(client,input.workspaceId,'read-worker','investigation.completed',{runId:input.runId,incidentId:input.incidentId,status});
+   // This records publishing intent only. The separate communication worker
+   // owns all external delivery; its unique event key makes retries harmless.
+   await client.query(`WITH destinations AS (
+    SELECT s.id,row_number() OVER(ORDER BY s.id) AS position FROM notification_subscriptions s
+    JOIN connector_instances c ON c.workspace_id=s.workspace_id AND c.id=s.connector_id
+    WHERE s.workspace_id=$1 AND s.service_id=$2 AND s.enabled AND c.mode='live' AND c.config_version=s.config_version LIMIT 100
+   ), capacity AS (SELECT count(*) AS pending FROM notification_deliveries WHERE workspace_id=$1 AND status IN ('queued','sending'))
+   INSERT INTO notification_deliveries(workspace_id,id,subscription_id,event_key,message,status,error_code,finished_at)
+   SELECT $1,gen_random_uuid(),d.id,$3,$4,CASE WHEN capacity.pending+d.position<=200 THEN 'queued' ELSE 'failed' END,
+    CASE WHEN capacity.pending+d.position<=200 THEN NULL ELSE 'queue-capacity' END,
+    CASE WHEN capacity.pending+d.position<=200 THEN NULL ELSE now() END
+   FROM destinations d CROSS JOIN capacity WHERE true ON CONFLICT(workspace_id,subscription_id,event_key) DO NOTHING`,[input.workspaceId,input.serviceId,`investigation:${input.runId}`,`Sentinel incident ${input.incidentId}: investigation ${input.runId} ${status}.`]);
+  }
  });}
 }

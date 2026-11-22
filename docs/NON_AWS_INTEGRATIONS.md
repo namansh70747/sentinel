@@ -14,6 +14,7 @@ npm run dev:import-local
 npm run dev:status
 npm run dev:stop
 npm run test:integrations
+npm run test:ntfy
 ```
 
 The combined entry point uses `compose.durable.yml`, `compose.observe.yml`, then
@@ -103,7 +104,8 @@ Fresh verification during implementation:
 
 1. Complete fresh/restart Docker acceptance, local login/logout, worker readiness,
    credential consistency checks, profile memory measurements and reproducible
-   integration-test command. No communication worker exists yet.
+   integration-test command. Both read and communication workers now run in Docker;
+   actual read and send operations have passed, beyond container state checks.
 2. Production worker now uses repository-backed service bindings and no global
    fallback; legacy activity construction remains only for existing compatibility
    tests. Explicit `dev:import-local` imports the local workload mappings and
@@ -121,9 +123,15 @@ Fresh verification during implementation:
    separately labelled. Cross-release archived-history fixtures remain to add.
 5. Add GitHub deployment/status/Actions/check adapters, incremental durable
    reconciliation, conditional requests, five-minute polling and manual sync.
-6. Add approved subscriptions, outgoing ledger, separate communication worker,
-   ntfy ACL/token/actual receipt, Slack and separate GitHub Issues credentials.
-   Existing anonymous local ntfy is not accepted as secure publishing.
+6. Approved version-bound subscriptions, outgoing deliveries/attempts ledger,
+   separate communication worker, notification APIs/UI, ntfy ACL/token and actual
+   receipt confirmation are implemented in migration 0020 and related modules.
+   Anonymous ntfy publish/subscribe are denied. Product browser test approved only
+   the dedicated local topic, queued a message and observed `confirmed` history.
+   A canonical-origin allowlist defect was found by that real operation, fixed
+   with a regression test, and the failed attempt was preserved. Slack adapter is
+   implemented, but no hosted destination was provided or tested. Separate GitHub
+   Issues credentials/workflow remain unfinished. Unknown sends never retry.
 7. Optional k3d, namespace-scoped Kubernetes reads, read-only Argo/Gitea fixtures,
    isolated OpenTofu plan imports, Backstage, estimated OpenCost, Trivy, versioned
    runbooks/FTS and authenticated workspace-scoped STDIO MCP.
@@ -133,3 +141,15 @@ Fresh verification during implementation:
 AWS remains simulated. Teams, Jira, Linear, PagerDuty and other commercial catalog
 items remain planned. Missing hosted credentials never count as successful
 integration and do not block testing local providers.
+
+## Communication checkpoint verification
+
+- Full suite with local least-privilege database: 119 passed, 12 skipped.
+- `test:integrations`: 17 passed across eight suites, including explicit approval,
+  role/tenant boundaries, intent-before-send and unknown-response duplicate safety.
+- `test:ntfy`: real authenticated publishing and exact subscription receipt passed.
+- Root and console TypeScript checks passed; peer review found no remaining
+  Critical/Important defects in the communication scope before final live testing.
+- Private ntfy password/token locations: `.local/ntfy/password`, `.local/ntfy/token`.
+  Re-running `dev:prepare-ntfy` preserves the generated credentials.
+- No Slack, GitHub Issues, AWS or company-account writes were performed.

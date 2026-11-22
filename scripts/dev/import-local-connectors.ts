@@ -35,5 +35,13 @@ try{
   const bindings=await repository.bindings(owner.workspaceId,serviceId);
   if(!bindings.some(binding=>binding.provider===fixture.provider))await repository.bind(owner.workspaceId,'local-bootstrap',serviceId,fixture.provider,connector.id,connector.configVersion,fixture.mapping);
  }
+ // This imports only the dedicated self-hosted test topic. Hosted publishing
+ // approval and service subscriptions are deliberately separate operations.
+ try{
+  const local=JSON.parse(await readFile('.local/ntfy/connection.json','utf8'));
+  if(local.endpoint!=='http://ntfy:80')throw new Error('Local ntfy endpoint changed; configure it through the UI');
+  const existing=(await repository.list(owner.workspaceId)).find(row=>row.provider==='ntfy'&&row.name==='Local ntfy');
+  if(!existing)await repository.create(owner.workspaceId,'local-bootstrap',{provider:'ntfy',name:'Local ntfy',mode:'live',config:{endpoint:local.endpoint,topic:local.topic}},{token:(await readFile('.local/ntfy/token','utf8')).trim()});
+ }catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;console.log('Local ntfy authentication is not configured; telemetry import is unaffected.');}
  console.log('Explicit local connector import complete. Existing connections and bindings preserved. Recreate Grafana to load the registered webhook; capability tests still required.');
 }finally{await db.close();}

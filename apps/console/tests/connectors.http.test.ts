@@ -15,6 +15,7 @@ describe.skipIf(!base||!process.env.TEST_DATABASE_URL)('connector HTTP authoriza
  });
  afterAll(async()=>{
   if(workspaceId)await db.inWorkspace(workspaceId,client=>client.query("UPDATE connector_tests SET status='failed',finished_at=now(),result=$1 WHERE status IN ('queued','running')",[{outcome:'not-configured',capability:'test-fixture',recordCount:0}]));
+  if(workspaceId)await db.inWorkspace(workspaceId,client=>client.query("UPDATE notification_deliveries SET status='failed',finished_at=now(),error_code='test-fixture' WHERE status='queued'"));
   await db.close();
  });
  it('protects credentials, enforces versions and tenant ownership, and queues tests',async()=>{
@@ -44,5 +45,18 @@ describe.skipIf(!base||!process.env.TEST_DATABASE_URL)('connector HTTP authoriza
   const read=`${base}/api/workspaces/${workspaceId}/investigations/${first.id}`;
   const viewed=await fetch(read,{headers:headers(2)});expect(viewed.status).toBe(200);expect((await viewed.json()).attempts).toHaveLength(8);
   expect((await fetch(read,{headers:headers(1)})).status).toBe(404);
+ },30000);
+ it('requires explicit destination approval and protects delivery management across roles and workspaces',async()=>{
+  const root=`${base}/api/workspaces/${workspaceId}`;
+  const connection=await(await fetch(root+'/connectors',{method:'POST',headers:headers(),body:JSON.stringify({provider:'ntfy',name:'Fixture notifications',mode:'live',config:{endpoint:'http://ntfy:80',topic:'sentinel-fixture-topic'},secret:{token:'private-fixture-notification-token'}})})).json();
+  const draft={serviceId,connectorId:connection.id,expectedVersion:1,destinationLabel:'Explicit fixture destination',approvedTestDestination:true};
+  expect((await fetch(root+'/notification-subscriptions',{method:'POST',headers:headers(2),body:JSON.stringify(draft)})).status).toBe(403);
+  expect((await fetch(root+'/notification-subscriptions',{method:'POST',headers:headers(),body:JSON.stringify({...draft,approvedTestDestination:false})})).status).toBe(400);
+  const created=await fetch(root+'/notification-subscriptions',{method:'POST',headers:headers(),body:JSON.stringify(draft)});expect(created.status).toBe(201);const subscription=await created.json();
+  const test=root+`/notification-subscriptions/${subscription.id}/tests`;
+  expect((await fetch(test,{method:'POST',headers:headers(2)})).status).toBe(403);expect((await fetch(test,{method:'POST',headers:headers()})).status).toBe(202);
+  expect((await fetch(root+'/notification-deliveries',{headers:headers(1)})).status).toBe(404);
+  const history=await fetch(root+'/notification-deliveries',{headers:headers(2)});expect(history.status).toBe(200);expect(await history.text()).not.toContain('private-fixture-notification-token');
+  expect((await fetch(root+`/notification-subscriptions/${subscription.id}`,{method:'PATCH',headers:headers(),body:JSON.stringify({enabled:false})})).status).toBe(200);
  },30000);
 });

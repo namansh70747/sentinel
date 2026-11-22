@@ -13,5 +13,6 @@ if(action==='up'){
 run('docker',[...base,...commands[action]]);
 if(action==='up'){
  run(process.execPath,['--import','tsx','scripts/dev/bootstrap-owner.ts']);
+ run(process.execPath,['scripts/dev/setup-ntfy.mjs']);
  run(process.execPath,['scripts/dev/wait.mjs','--core']);
 }
