@@ -7,7 +7,7 @@ export class ConnectorHttpError extends Error {
  constructor(public readonly code:'endpoint-rejected'|'redirect-rejected'|'response-too-large'|'denied'|'unavailable'|'rate-limited'|'invalid-response',public readonly status?:number,public readonly retryAfterMs?:number){super(`Connector request ${code}`);}
 }
 interface Address {address:string;family:number}
-interface Options {allowedPrivateOrigins?:string[];maxResponseBytes?:number;timeoutMs?:number;resolve?:(hostname:string)=>Promise<Address[]>}
+interface Options {allowedPrivateOrigins?:string[];maxResponseBytes?:number;timeoutMs?:number;deadlineAt?:number;resolve?:(hostname:string)=>Promise<Address[]>}
 export interface HttpResult {status:number;headers:IncomingHttpHeaders;text:string}
 const privateNetworks=new BlockList(),forbiddenNetworks=new BlockList();
 for(const [address,prefix]of [['0.0.0.0',8],['10.0.0.0',8],['127.0.0.0',8],['172.16.0.0',12],['192.168.0.0',16],['100.64.0.0',10],['224.0.0.0',4]] as const)privateNetworks.addSubnet(address,prefix,'ipv4');
@@ -20,6 +20,7 @@ export class ConnectorHttpClient {
   this.origins=new Set(options.allowedPrivateOrigins??localConnectorOrigins());
   this.limit=options.maxResponseBytes??2*1024*1024;this.timeout=options.timeoutMs??10000;
   if(!Number.isInteger(this.limit)||this.limit<1||this.limit>2*1024*1024||!Number.isInteger(this.timeout)||this.timeout<1||this.timeout>30000)throw new Error('Invalid connector request bounds');
+  if(options.deadlineAt!==undefined&&!Number.isFinite(options.deadlineAt))throw new Error('Invalid connector deadline');
  }
  private async endpoint(raw:string){
   let url:URL;try{url=new URL(raw);}catch{throw new ConnectorHttpError('endpoint-rejected');}
@@ -64,8 +65,9 @@ export class ConnectorHttpClient {
   });
  }
  async send(url:string,options:{method?:'GET'|'POST';headers?:Record<string,string>;body?:string}={}):Promise<HttpResult>{
-  const deadline=Date.now()+30000;
+  const deadline=Math.min(Date.now()+30000,this.options.deadlineAt??Infinity);
   for(let attempt=0;;attempt++){
+   if(Date.now()>=deadline)throw new ConnectorHttpError('unavailable');
    try{return await this.once(url,options,Math.max(1,Math.min(this.timeout,deadline-Date.now())));}
    catch(error){
     if(!(error instanceof ConnectorHttpError)||options.method==='POST'||attempt>=2||!['unavailable','rate-limited'].includes(error.code)||(error.status!==undefined&&error.status<500&&error.status!==429))throw error;

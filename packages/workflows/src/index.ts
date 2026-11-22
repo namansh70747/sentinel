@@ -1,6 +1,6 @@
 import { isCancellation, patched, proxyActivities } from '@temporalio/workflow';
 import type { SourceResult, SourceName } from '@sentinel/contracts';
-export interface InvestigationInput { workspaceId: string; incidentId: string; serviceId: string }
+export interface InvestigationInput { workspaceId: string; incidentId: string; serviceId: string; runId?:string }
 export interface InvestigationResult { status: 'advised' | 'escalated'; summary: string }
 export interface ReadActivities {
  collectPrometheus(input: InvestigationInput): Promise<SourceResult>;

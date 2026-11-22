@@ -7,6 +7,7 @@ import { SentinelDatabase } from '@sentinel/db';
 import type { ConnectorRepository } from '@sentinel/db/connectors';
 import { collectBoundLogs,collectBoundTraces,collectBoundMetrics } from '@sentinel/connectors/bound-telemetry';
 import { ConnectorHttpClient,ConnectorHttpError } from '@sentinel/connectors/http';
+import { InvestigationRepository,type RunIdentity } from '@sentinel/db/investigations';
 
 export function readEcsMode(value = process.env.SENTINEL_ECS_MODE): 'off' | 'simulated' | 'live' {
  if (value !== 'off' && value !== 'simulated' && value !== 'live') throw new Error('SENTINEL_ECS_MODE must be off, simulated, or live');
@@ -15,7 +16,14 @@ export function readEcsMode(value = process.env.SENTINEL_ECS_MODE): 'off' | 'sim
 }
 
 export function createActivities(db: SentinelDatabase, connections?:ConnectorRepository) {
+ const runs=new InvestigationRepository(db);
+ const cached=async(input:InvestigationInput,source:SourceName):Promise<SourceResult|null>=>{
+  if(!input.runId)return null;
+  const prior=await runs.cached(input as RunIdentity,source);
+  return prior?{source,...prior,summary:'Persisted evidence reused for this investigation run.'}:null;
+ };
  const write = async (input: InvestigationInput, source: SourceName, outcome: SourceOutcome, provenance: Provenance | null, detail: unknown, extras: { severity?: string; observedAt?: string | null; windowCovered?: boolean | null } = {}) => {
+  if(input.runId){await runs.persist(input as RunIdentity,source,outcome,provenance,detail,extras);return;}
   await db.inWorkspace(input.workspaceId, async client => {
    const inserted = await client.query(
     `INSERT INTO incident_evidence(workspace_id,incident_id,service_id,source,sample,severity,outcome,provenance,observed_at,window_covered,detail)
@@ -33,28 +41,31 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
   return value;
  };
  const boundCollect=async(input:InvestigationInput,source:'prometheus'|'loki'|'tempo'|'github'):Promise<SourceResult>=>{
+  const http=new ConnectorHttpClient({deadlineAt:Date.now()+20000});
   try{
-   const connection=await connections!.resolve(input.workspaceId,input.serviceId,source);
+   const prior=await cached(input,source);if(prior)return prior;
+   const connection=await connections!.resolve(input.workspaceId,input.serviceId,source,input.runId);
    if(!connection){await write(input,source,'not-configured',null,{reason:'No enabled workspace connection is mapped to this service.'});return result(source,'not-configured',null,'Map an enabled workspace connection to this service.');}
    const metadata={connectorId:connection.id,configVersion:connection.configVersion,collectedAt:new Date().toISOString()};
    let detail:unknown,outcome:SourceOutcome='ok',severity:string|undefined,covered:boolean|undefined;
-   if(source==='loki'){const logs=await collectBoundLogs(connection);detail={...logs,...metadata};if(!logs.lines.length)outcome='empty';}
-   else if(source==='tempo'){const traces=await collectBoundTraces(connection);detail={...traces,...metadata};if(!traces.traces.length)outcome='empty';}
+   const observedAt=connection.observedAt?.getTime()??Date.now();
+   if(source==='loki'){const logs=await collectBoundLogs(connection,http,observedAt);detail={...logs,...metadata};if(!logs.lines.length)outcome='empty';}
+   else if(source==='tempo'){const traces=await collectBoundTraces(connection,http,observedAt);detail={...traces,...metadata};if(!traces.traces.length)outcome='empty';}
    else if(source==='github'){
     if(!connection.secret.token){await write(input,source,'not-configured',null,{...metadata,reason:'Read credential is required.'});return result(source,'not-configured',null,'GitHub read credential is required.');}
     const owner=encodeURIComponent(String(connection.mapping.owner)),repo=encodeURIComponent(String(connection.mapping.repo));
-    const commits=await new ConnectorHttpClient().json(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=20`,{authorization:`Bearer ${connection.secret.token}`,accept:'application/vnd.github+json','user-agent':'Sentinel'}) as unknown;
+    const commits=await http.json(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=20`,{authorization:`Bearer ${connection.secret.token}`,accept:'application/vnd.github+json','user-agent':'Sentinel'}) as unknown;
     if(!Array.isArray(commits)||commits.some(row=>typeof row?.sha!=='string'||typeof row?.commit?.message!=='string'))throw new ConnectorHttpError('invalid-response');
     detail={...metadata,commits:commits.slice(0,20)};if(!commits.length)outcome='empty';
    }else{
-    const targets=await db.inWorkspace(input.workspaceId,async client=>(await client.query('SELECT availability_target,latency_target_ms FROM service_slos WHERE workspace_id=$1 AND service_id=$2',[input.workspaceId,input.serviceId])).rows[0]);
+    const targets=input.runId?(connection.mapping.availabilityTarget&&connection.mapping.latencyTargetMs?{availability_target:Number(connection.mapping.availabilityTarget),latency_target_ms:Number(connection.mapping.latencyTargetMs)}:null):await db.inWorkspace(input.workspaceId,async client=>(await client.query('SELECT availability_target,latency_target_ms FROM service_slos WHERE workspace_id=$1 AND service_id=$2',[input.workspaceId,input.serviceId])).rows[0]);
     if(!targets){await write(input,source,'not-configured',null,{...metadata,reason:'Service SLO targets are required.'});return result(source,'not-configured',null,'Configure service SLO targets.');}
-    const metrics=await collectBoundMetrics(connection,{availabilityTarget:targets.availability_target,latencyTargetMs:targets.latency_target_ms});
+    const metrics=await collectBoundMetrics(connection,{availabilityTarget:targets.availability_target,latencyTargetMs:targets.latency_target_ms},http,observedAt);
     const qualifies=(seconds:number,latency=false)=>metrics.coverage.find(window=>window.windowSeconds===seconds)?.inputs.filter(row=>latency?row.input==='latencyCoverageQuery':row.input!=='latencyCoverageQuery').every(row=>row.covered)??false;
     const qualified=qualifiedSeverity(metrics.sample,{fiveMinutes:qualifies(300),tenMinutes:qualifies(600,true),thirtyMinutes:qualifies(1800),oneHour:qualifies(3600),sixHours:qualifies(21600)});
     covered=metrics.coverage.every(window=>window.inputs.every(row=>row.covered));severity=qualified??'sev4';outcome=covered?'ok':'uncovered';detail={...metrics.sample,...metadata,coverage:metrics.coverage,queryWindow:metrics.queryWindow,severityQualified:qualified!==null,windowCovered:covered};
    }
-   await write(input,source,outcome,'live',redact(detail,Object.values(connection.secret)),{severity,observedAt:new Date().toISOString(),windowCovered:covered});
+   await write(input,source,outcome,'live',redact(detail,Object.values(connection.secret)),{severity,observedAt:new Date(observedAt).toISOString(),windowCovered:covered});
    return result(source,outcome,'live',outcome==='empty'?`${source} returned no observations for this service.`:outcome==='uncovered'?'SLI input coverage is incomplete; severity requires qualifying windows.':`${source} service evidence recorded.`);
   }catch(error){const code=error instanceof ConnectorHttpError||error instanceof SloReadError?error.code:'collection-failed';const outcome=code==='denied'?'denied':code==='stale'?'stale':code==='empty'?'empty':'unavailable';await write(input,source,outcome,'live',{errorCode:code,reason:'Workspace provider read failed.'});return result(source,outcome,'live',`Workspace provider read failed (${code}).`);}
  };
@@ -93,6 +104,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    return result('prometheus', outcome, 'live', sev ? `Prometheus SLI evaluated as ${sev} from qualifying windows. No production action proposed.` : 'Prometheus SLI coverage is incomplete. Severity is not yet qualified.');
   },
   async collectEcs(input: InvestigationInput): Promise<SourceResult> {
+   const prior=await cached(input,'ecs');if(prior)return prior;
    let mode: 'off' | 'simulated' | 'live';
    try { mode = readEcsMode(); }
    catch (error) {
@@ -112,7 +124,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
      : await new EcsReadClient({ region: service.region, accountId: service.account_id, readRoleArn: process.env.SENTINEL_READ_ROLE_ARN! }).observe(service.resource_arn);
     const provenance: Provenance = mode === 'simulated' ? 'simulated' : 'live';
     await write(input, 'ecs', 'ok', provenance, observation, { observedAt: observation.observedAt });
-    if (service) {
+    if (service&&!input.runId) {
      await db.inWorkspace(input.workspaceId, async client => {
       await client.query('INSERT INTO ecs_evidence(workspace_id,incident_id,service_id,observation,provenance) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING', [input.workspaceId, input.incidentId, input.serviceId, observation, provenance]);
       const prom = (await client.query("SELECT severity FROM incident_evidence WHERE workspace_id=$1 AND incident_id=$2 AND source='prometheus'", [input.workspaceId, input.incidentId])).rows[0];
@@ -176,21 +188,25 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    }
   },
   async collectCloudwatch(input: InvestigationInput): Promise<SourceResult> {
+   const prior=await cached(input,'cloudwatch');if(prior)return prior;
    const detail = simulateCloudWatch('000000000000');
    await write(input, 'cloudwatch', 'ok', 'simulated', detail);
    return result('cloudwatch', 'ok', 'simulated', 'Simulated CloudWatch is not a measurement.');
   },
   async collectCost(input: InvestigationInput): Promise<SourceResult> {
+   const prior=await cached(input,'cost');if(prior)return prior;
    const detail = simulateCost('000000000000');
    await write(input, 'cost', 'ok', 'simulated', detail);
    return result('cost', 'ok', 'simulated', 'Simulated cost is not a bill.');
   },
   async collectDr(input: InvestigationInput): Promise<SourceResult> {
+   const prior=await cached(input,'dr');if(prior)return prior;
    const detail = simulateDr('000000000000');
    await write(input, 'dr', 'ok', 'simulated', detail);
    return result('dr', 'ok', 'simulated', 'Restore was not attempted.');
   },
   async recordInvestigation(input: InvestigationInput, outcome: InvestigationResult) {
+   if(input.runId){await runs.finish(input as RunIdentity,outcome.status,outcome.summary);return;}
    await db.inWorkspace(input.workspaceId, async client => {
     const prom = (await client.query("SELECT severity, outcome, detail FROM incident_evidence WHERE workspace_id=$1 AND incident_id=$2 AND source='prometheus'", [input.workspaceId, input.incidentId])).rows[0];
     const severity = prom && (prom.outcome === 'ok' || (prom.outcome === 'uncovered' && prom.detail?.severityQualified===true)) ? prom.severity : null;

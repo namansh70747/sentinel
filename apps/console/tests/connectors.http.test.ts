@@ -4,13 +4,14 @@ import { SentinelDatabase } from '@sentinel/db';
 const base=process.env.TEST_CONSOLE_URL;
 describe.skipIf(!base||!process.env.TEST_DATABASE_URL)('connector HTTP authorization',()=>{
  const db=new SentinelDatabase(process.env.TEST_DATABASE_URL!);
- const tokens=[randomBytes(32).toString('base64url'),randomBytes(32).toString('base64url')];
+ const tokens=Array.from({length:3},()=>randomBytes(32).toString('base64url')),identities:string[]=[];
  const headers=(index=0)=>({cookie:`sentinel_session=${tokens[index]}`,origin:base!,'content-type':'application/json'});
  let workspaceId:string,serviceId:string;
  beforeAll(async()=>{
-  for(const token of tokens){const id=randomUUID();await db.pool.query('INSERT INTO identities(id,issuer,subject) VALUES($1,$2,$3)',[id,'https://identity.example',id]);await db.pool.query("INSERT INTO sessions(token_hash,identity_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",[createHash('sha256').update(token).digest('hex'),id]);}
+  for(const token of tokens){const id=randomUUID();identities.push(id);await db.pool.query('INSERT INTO identities(id,issuer,subject) VALUES($1,$2,$3)',[id,'https://identity.example',id]);await db.pool.query("INSERT INTO sessions(token_hash,identity_id,expires_at) VALUES($1,$2,now()+interval '1 hour')",[createHash('sha256').update(token).digest('hex'),id]);}
   const workspace=await(await fetch(`${base}/api/workspaces`,{method:'POST',headers:headers(),body:JSON.stringify({name:'Connector boundary'})})).json();workspaceId=workspace.workspace_id;
   const service=await(await fetch(`${base}/api/workspaces/${workspaceId}/services`,{method:'POST',headers:headers(),body:JSON.stringify({name:'checkout',owner:'test',account_id:'000000000000',region:'ap-south-1',resource_arn:'arn:aws:ecs:ap-south-1:000000000000:service/sentinel-demo/checkout-api'})})).json();serviceId=service.id;
+  await db.pool.query("INSERT INTO workspace_memberships(workspace_id,identity_id,role) VALUES($1,$2,'viewer')",[workspaceId,identities[2]]);
  });
  afterAll(async()=>{
   if(workspaceId)await db.inWorkspace(workspaceId,client=>client.query("UPDATE connector_tests SET status='failed',finished_at=now(),result=$1 WHERE status IN ('queued','running')",[{outcome:'not-configured',capability:'test-fixture',recordCount:0}]));
@@ -33,5 +34,15 @@ describe.skipIf(!base||!process.env.TEST_DATABASE_URL)('connector HTTP authoriza
   const test=await fetch(`${endpoint}/${connector.id}/tests/${job.id}`,{headers:headers()});expect(test.status).toBe(200);expect((await test.json()).configVersion).toBe(2);
   expect((await fetch(`${endpoint}/${connector.id}/tests/${job.id}`,{headers:headers(1)})).status).toBe(404);
   const audit=await db.inWorkspace(workspaceId,async client=>(await client.query('SELECT payload FROM audit_events')).rows);expect(JSON.stringify(audit)).not.toContain('never-return');
+ },30000);
+ it('creates distinct refresh runs, permits viewer reads and denies viewer mutations',async()=>{
+  const incidentId=randomUUID();await db.inWorkspace(workspaceId,c=>c.query("INSERT INTO incidents(workspace_id,id,service_id,title,state,severity) VALUES($1,$2,$3,'Refresh test','recovered','sev4')",[workspaceId,incidentId,serviceId]));
+  const endpoint=`${base}/api/workspaces/${workspaceId}/incidents/${incidentId}/investigations`;
+  expect((await fetch(endpoint,{method:'POST',headers:headers(2)})).status).toBe(403);
+  const firstResponse=await fetch(endpoint,{method:'POST',headers:headers()});expect(firstResponse.status).toBe(202);const first=await firstResponse.json();
+  const second=await(await fetch(endpoint,{method:'POST',headers:headers()})).json();expect(second.id).not.toBe(first.id);
+  const read=`${base}/api/workspaces/${workspaceId}/investigations/${first.id}`;
+  const viewed=await fetch(read,{headers:headers(2)});expect(viewed.status).toBe(200);expect((await viewed.json()).attempts).toHaveLength(8);
+  expect((await fetch(read,{headers:headers(1)})).status).toBe(404);
  },30000);
 });

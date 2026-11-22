@@ -22,9 +22,9 @@ it('uses each service mapping and authenticated tenant headers for logs and trac
  }finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });
 it('qualifies coverage from each raw SLI input, independently of exporter uptime',async()=>{
- const now=Math.floor(Date.now()/15000)*15000,queries:string[]=[];
+ const now=Math.floor(Date.now()/15000)*15000,queries:string[]=[],evaluationTimes:string[]=[];
  const server=createServer((request,response)=>{
-  const query=new URL(request.url!,'http://local').searchParams.get('query')!;queries.push(query);
+  const url=new URL(request.url!,'http://local'),query=url.searchParams.get('query')!;queries.push(query);evaluationTimes.push(url.searchParams.get('time')!);
   const coverage=query.includes('_raw[6h]');
   const result=coverage?(query.startsWith('latency_raw')?[]:[{metric:{service:'checkout'},values:Array.from({length:1441},(_,i)=>[now/1000-21600+i*15,String(50+i)])}]):[{metric:{service:'checkout'},value:[now/1000,query==='latency'?'20':'1000']}];
   response.setHeader('content-type','application/json');response.end(JSON.stringify({status:'success',data:{resultType:coverage?'matrix':'vector',result}}));
@@ -35,5 +35,6 @@ it('qualifies coverage from each raw SLI input, independently of exporter uptime
   expect(metrics.coverage.every(window=>window.inputs.find(row=>row.input==='goodCoverageQuery')?.covered)).toBe(true);
   expect(metrics.coverage.every(window=>window.inputs.find(row=>row.input==='latencyCoverageQuery')?.covered)).toBe(false);
   expect(queries.some(query=>query.includes('up{'))).toBe(false);
+  expect(evaluationTimes.every(value=>value===String(now/1000))).toBe(true);
  }finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });

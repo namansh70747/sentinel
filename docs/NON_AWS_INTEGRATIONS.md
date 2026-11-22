@@ -111,8 +111,14 @@ Fresh verification during implementation:
 3. Raw per-SLI coverage, bounded logs, trace details and extracted log trace IDs
    are implemented. Two-service log isolation passed using an HTTP fixture;
    two independently instrumented real Docker workloads are still outstanding.
-4. Add investigation runs, persisted retry attempts and immutable evidence
-   envelopes, preserving legacy rows; add refresh APIs and Temporal replay tests.
+4. Investigation runs, frozen configuration/mapping snapshots, persisted retry
+   attempts and immutable evidence envelopes are implemented in migration 0019.
+   Refresh/list/detail APIs and incident refresh UI are implemented. Retries reuse
+   persisted observations; terminalization fills missing attempts with explicit
+   failure envelopes and blocks late changes. Failed Temporal executions are
+   reconciled; new runs have a ten-minute execution timeout. Database/HTTP tests,
+   completed-history replay and a real browser refresh passed. Legacy rows remain
+   separately labelled. Cross-release archived-history fixtures remain to add.
 5. Add GitHub deployment/status/Actions/check adapters, incremental durable
    reconciliation, conditional requests, five-minute polling and manual sync.
 6. Add approved subscriptions, outgoing ledger, separate communication worker,

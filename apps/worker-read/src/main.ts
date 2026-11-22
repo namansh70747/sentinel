@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { ConnectorRepository } from '@sentinel/db/connectors';
 import { SecretVault } from '@sentinel/connectors/secrets';
 import { ConnectorTestRunner } from './connector-tests';
+import { RunDispatcher } from './run-dispatch';
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
 readEcsMode();
 const db = new SentinelDatabase(process.env.DATABASE_URL);
@@ -19,9 +20,10 @@ try {
  connection=await NativeConnection.connect({address:process.env.TEMPORAL_ADDRESS??'localhost:7233'});
  clientConnection=await Connection.connect({address:process.env.TEMPORAL_ADDRESS??'localhost:7233'});
  const client=new Client({connection:clientConnection});
+ const runDispatcher=new RunDispatcher(db,client);
  const worker = await Worker.create({ connection, taskQueue:'sentinel-read', workflowsPath:fileURLToPath(new URL('../../../packages/workflows/src/index.ts',import.meta.url)), activities:createActivities(db,connectorRepository) });
  let running=false,testing=false;
- poller=setInterval(async()=>{if(running)return;running=true;try{await dispatchOne(db,client);}catch{console.error('Investigation dispatch failed');}finally{running=false;}},1000);
+ poller=setInterval(async()=>{if(running)return;running=true;try{await dispatchOne(db,client);await runDispatcher.tick();}catch{console.error('Investigation dispatch failed');}finally{running=false;}},1000);
  testPoller=setInterval(async()=>{if(testing)return;testing=true;try{await connectorTests.tick();}catch{console.error('Connector test processing failed; check local key and database availability');}finally{testing=false;}},2000);
  await worker.run();
 } finally { clearInterval(poller);clearInterval(testPoller); await clientConnection?.close(); await connection?.close(); await db.close(); }

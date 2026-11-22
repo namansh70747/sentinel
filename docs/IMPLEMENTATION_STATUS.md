@@ -6,6 +6,14 @@ The current non-AWS implementation ledger and outstanding acceptance gates are
 in [NON_AWS_INTEGRATIONS.md](./NON_AWS_INTEGRATIONS.md). Historical entries below
 describe earlier checkpoints; they do not certify the current bundle complete.
 
+Checkpoint `422e0a6` adds Docker startup, encrypted workspace connectors, capability
+jobs, service mappings and production telemetry migration. The next checkpoint
+adds version-frozen refresh runs, immutable evidence, terminal failure handling,
+Temporal reconciliation and refresh UI. Actual local Grafana delivery and duplicate
+suppression passed; a browser-requested refresh persisted all eight source outcomes.
+AWS remains simulated. GitHub reconciliation, communication workers and the
+optional infrastructure bundle remain unfinished.
+
 ## Current execution — 2026-11-16
 
 GitHub `main` is `b61c859`. `npm test` with local Postgres and Temporal passed 93 tests and skipped 3. Typecheck passed. `TEST_LIVE_TELEMETRY=true npx vitest run tests/live/telemetry.live.test.ts` passed: one real `GET /fail` was visible in Prometheus, a Loki line with the same request and trace ids, and a Tempo trace retrieval. Severity is stored only when the matching scrape windows are covered. The rest of the master plan, including a fresh Grafana-evaluated alert in this commit and live AWS, is not finished.

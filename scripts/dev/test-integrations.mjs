@@ -27,7 +27,7 @@ try{
   await new Promise(resolve=>setTimeout(resolve,500));
  }
  if(!ready)throw new Error('Test console readiness timed out');
- await run('npx',['vitest','run','packages/db/src/connectors.test.ts','apps/console/tests/connectors.http.test.ts','apps/worker-read/src/connector-tests.test.ts','apps/worker-read/src/bound-activities.test.ts'],env);
+ await run('npx',['vitest','run','packages/db/src/connectors.test.ts','packages/db/src/investigations.test.ts','apps/console/tests/connectors.http.test.ts','apps/worker-read/src/connector-tests.test.ts','apps/worker-read/src/bound-activities.test.ts','apps/worker-read/src/run-dispatch.test.ts'],env);
  console.log('Local connector database, HTTP authorization and queued capability checks passed. Hosted publishing and full telemetry acceptance are separate gates.');
 }finally{
  server.kill('SIGTERM');

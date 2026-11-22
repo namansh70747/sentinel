@@ -38,3 +38,8 @@ it('bounds DNS resolution and does not retry permanent HTTP failures',async()=>{
  await expect(new ConnectorHttpClient({allowedPrivateOrigins:[url]}).get(url)).rejects.toMatchObject({status:404});
  expect(calls).toBe(1);
 });
+it('shares a collection deadline across sequential reads',async()=>{
+ const url=await serve((_req,res)=>res.end('{}'));
+ const client=new ConnectorHttpClient({allowedPrivateOrigins:[url],deadlineAt:Date.now()-1});
+ await expect(client.get(url)).rejects.toMatchObject({code:'unavailable'});
+});

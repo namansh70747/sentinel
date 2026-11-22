@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { SourceList, type SourceRow } from '../../../components/source-list';
+import { InvestigationRuns } from '../../../components/investigation-runs';
 type Incident = { id: string; title: string; state: string; severity: string; observed_severity: string | null; sources: SourceRow[] };
 export function IncidentView({ workspaceId, incidentId }: { workspaceId: string; incidentId: string }) {
  const [row, setRow] = useState<Incident | null>(null);
@@ -25,6 +26,7 @@ export function IncidentView({ workspaceId, incidentId }: { workspaceId: string;
  return <article>
   <h1>{row.title}</h1>
   <p>{row.observed_severity ?? 'not measured'} / {row.state}</p>
-  <SourceList sources={row.sources ?? []} />
+  <InvestigationRuns workspaceId={workspaceId} incidentId={incidentId}/>
+  <details><summary>Legacy incident evidence</summary><p>Historical observations are preserved separately from fresh investigation runs.</p><SourceList sources={row.sources ?? []} /></details>
  </article>;
 }

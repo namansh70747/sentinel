@@ -52,7 +52,7 @@ export async function collectBoundTraces(connection:BoundTelemetry,http=new Conn
 
 /** Coverage is measured from the actual three SLI input series, never exporter up. */
 export async function collectBoundMetrics(connection:BoundTelemetry,targets:{availabilityTarget:number;latencyTargetMs:number},http=new ConnectorHttpClient(),now=Date.now()){
- const client=new PrometheusClient({url:String(connection.config.endpoint),token:connection.secret.token,headers:providerHeaders(connection),transport:http});
+ const client=new PrometheusClient({url:String(connection.config.endpoint),token:connection.secret.token,headers:providerHeaders(connection),transport:http,evaluationTime:now/1000});
  const mapping=connection.mapping;
  const sample=await collectSlo(client,{...targets,goodQuery:String(mapping.goodQuery),totalQuery:String(mapping.totalQuery),latencyQuery:String(mapping.latencyQuery)},now);
  const series=await Promise.all(['goodCoverageQuery','totalCoverageQuery','latencyCoverageQuery'].map(async key=>{
