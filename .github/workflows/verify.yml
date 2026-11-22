@@ -33,6 +33,11 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Generate private connector encryption key for isolated tests
+        run: |
+          mkdir -p .local
+          node -e "require('fs').writeFileSync('.local/connector-key', require('crypto').randomBytes(32), {mode:0o600})"
+          echo "SENTINEL_CONNECTOR_KEY_FILE=$GITHUB_WORKSPACE/.local/connector-key" >> "$GITHUB_ENV"
       - run: npm run db:migrate && npm run db:provision
         env:
           DATABASE_URL: postgres://postgres:sentinel-ci-admin@localhost:5432/sentinel_test

@@ -1,5 +1,6 @@
 export interface PrometheusSample { metric: Record<string, string>; value: [number, string] }
-export interface PrometheusConfig { url: string; token?: string; timeoutMs?: number }
+import type { ConnectorHttpClient } from './http';
+export interface PrometheusConfig { url: string; token?: string; timeoutMs?: number;headers?:Record<string,string>;transport?:ConnectorHttpClient }
 
 export class PrometheusClient {
   private readonly base: URL;
@@ -12,6 +13,7 @@ export class PrometheusClient {
     url.pathname = `${url.pathname.replace(/\/$/, '')}${path}`;
     url.search = '';
     if (query) url.searchParams.set('query', query);
+    if(this.config.transport)return this.config.transport.json(url.href,{...this.config.headers,...(this.config.token?{authorization:`Bearer ${this.config.token}`}:{})});
     if (process.env.SENTINEL_EGRESS_ALLOWLIST) {
      const { assertAllowed } = await import('./egress');
      assertAllowed(url.origin);

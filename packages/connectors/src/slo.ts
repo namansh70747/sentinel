@@ -1,13 +1,16 @@
 import { PrometheusClient } from './prometheus';
 import type { SliWindows } from '@sentinel/contracts';
 export interface SloMapping { availabilityTarget:number; latencyTargetMs:number; goodQuery:string; totalQuery:string; latencyQuery:string }
+export class SloReadError extends Error {
+ constructor(public readonly code:'empty'|'stale'|'invalid-response',message:string){super(message);}
+}
 export async function collectSlo(client:PrometheusClient, mapping:SloMapping, now=Date.now()):Promise<SliWindows> {
  if (!(mapping.availabilityTarget>0&&mapping.availabilityTarget<1) || !(mapping.latencyTargetMs>0) || !Number.isFinite(mapping.latencyTargetMs)) throw new Error('Invalid SLO targets');
  const scalar=async(query:string)=>{
   const values=await client.query(query);
-  if(values.length!==1)throw new Error('SLI query must return exactly one series');
+  if(values.length!==1)throw new SloReadError(values.length===0?'empty':'invalid-response','SLI query must return exactly one series');
   const [timestamp,raw]=values[0].value;
-  if(timestamp*1000<now-120000 || timestamp*1000>now+30000)throw new Error('Stale SLI observation');
+  if(timestamp*1000<now-120000 || timestamp*1000>now+30000)throw new SloReadError('stale','Stale SLI observation');
   return Number(raw);
  };
  if(!mapping.goodQuery.includes('{window}') || !mapping.totalQuery.includes('{window}'))throw new Error('Request queries require {window} placeholder');

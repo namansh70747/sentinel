@@ -23,7 +23,8 @@ services:
   temporal-init:
     image: temporalio/temporal:1.5.1
     user: "0:0"
-    command: ["sh", "-c", "chown 1000:1000 /data"]
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chown 1000:1000 /data"]
     volumes: [sentinel-temporal:/data]
   temporal:
     image: temporalio/temporal:1.5.1

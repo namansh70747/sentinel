@@ -4,7 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./secrets": "./src/secrets.ts",
+    "./config": "./src/config.ts",
+    "./http": "./src/http.ts",
+    "./connection-test": "./src/connection-test.ts",
+    "./bound-telemetry": "./src/bound-telemetry.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ecs": "^3.1161.0",

@@ -1,10 +1,17 @@
 # Use with compose.durable.yml and compose.observe.yml, in that order.
 services:
+  grafana:
+    environment:
+      SENTINEL_GRAFANA_WEBHOOK_BASE_URL: http://console:3010
   console:
     networks: [default, observe]
     environment:
       PROMETHEUS_URL: http://prometheus:9090
       SENTINEL_EGRESS_ALLOWLIST: prometheus,loki,tempo,ntfy
+      SENTINEL_CONNECTOR_KEY_FILE: /run/secrets/connector_key
+      SENTINEL_ALLOW_LOCAL_OIDC_HTTP: "true"
+      SENTINEL_LOCAL_OIDC_INTERNAL_URL: http://keycloak:8080
+    secrets: [connector_key]
   worker-read:
     networks: [default, observe]
     environment:
@@ -15,3 +22,8 @@ services:
       NTFY_TOPIC: ${NTFY_TOPIC:-sentinel-local-alerts}
       SENTINEL_ECS_MODE: simulated
       SENTINEL_EGRESS_ALLOWLIST: prometheus,loki,tempo,ntfy
+      SENTINEL_CONNECTOR_KEY_FILE: /run/secrets/connector_key
+    secrets: [connector_key]
+secrets:
+  connector_key:
+    file: ./.local/connector-key

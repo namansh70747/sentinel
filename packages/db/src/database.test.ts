@@ -15,8 +15,12 @@ describe.skipIf(!url)('Postgres workspace isolation and audit durability', () =>
   expect(rows).toHaveLength(8);
   expect(rows[0].previous_hash).toBe('0'.repeat(64));
   for (let i = 1; i < rows.length; i++) expect(rows[i].previous_hash).toBe(rows[i-1].hash);
-  await expect(db.inWorkspace(a, client => client.query('UPDATE audit_events SET actor=$1 WHERE workspace_id=$2', ['tamper',a]))).rejects.toThrow('append-only');
-  await expect(db.inWorkspace(a, client => client.query('DELETE FROM audit_events WHERE workspace_id=$1',[a]))).rejects.toThrow('append-only');
+  // Least-privilege runtime credentials reject these before the immutable
+  // trigger executes; migration-owner tests may reach the trigger itself.
+  await expect(db.inWorkspace(a, client => client.query('UPDATE audit_events SET actor=$1 WHERE workspace_id=$2', ['tamper',a]))).rejects.toThrow(/append-only|permission denied/);
+  await expect(db.inWorkspace(a, client => client.query('DELETE FROM audit_events WHERE workspace_id=$1',[a]))).rejects.toThrow(/append-only|permission denied/);
+  const unchanged=await db.inWorkspace(a,async client=>(await client.query('SELECT * FROM audit_events WHERE workspace_id=$1 ORDER BY sequence',[a])).rows);
+  expect(unchanged).toEqual(rows);
  });
  it('does not leak tenant scope when pooled connections are reused', async () => {
   await db.appendAudit(b,'test','test.other',{});

@@ -1,9 +1,12 @@
-import { EcsReadClient, LokiClient, MOCK_SERVICE_ARN, MockEcsReadClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, simulateCloudWatch, simulateCost, simulateDr } from '@sentinel/connectors';
+import { EcsReadClient, LokiClient, MOCK_SERVICE_ARN, MockEcsReadClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, simulateCloudWatch, simulateCost, simulateDr, SloReadError } from '@sentinel/connectors';
 import type { Provenance, SourceName, SourceOutcome, SourceResult } from '@sentinel/contracts';
 import { correlateEcsChange } from '@sentinel/engine';
 import { qualifiedSeverity } from '@sentinel/policy';
 import type { InvestigationInput, InvestigationResult } from '@sentinel/workflows';
 import { SentinelDatabase } from '@sentinel/db';
+import type { ConnectorRepository } from '@sentinel/db/connectors';
+import { collectBoundLogs,collectBoundTraces,collectBoundMetrics } from '@sentinel/connectors/bound-telemetry';
+import { ConnectorHttpClient,ConnectorHttpError } from '@sentinel/connectors/http';
 
 export function readEcsMode(value = process.env.SENTINEL_ECS_MODE): 'off' | 'simulated' | 'live' {
  if (value !== 'off' && value !== 'simulated' && value !== 'live') throw new Error('SENTINEL_ECS_MODE must be off, simulated, or live');
@@ -11,7 +14,7 @@ export function readEcsMode(value = process.env.SENTINEL_ECS_MODE): 'off' | 'sim
  return value;
 }
 
-export function createActivities(db: SentinelDatabase) {
+export function createActivities(db: SentinelDatabase, connections?:ConnectorRepository) {
  const write = async (input: InvestigationInput, source: SourceName, outcome: SourceOutcome, provenance: Provenance | null, detail: unknown, extras: { severity?: string; observedAt?: string | null; windowCovered?: boolean | null } = {}) => {
   await db.inWorkspace(input.workspaceId, async client => {
    const inserted = await client.query(
@@ -23,11 +26,44 @@ export function createActivities(db: SentinelDatabase) {
   });
  };
  const result = (source: SourceName, outcome: SourceOutcome, provenance: Provenance | null, summary: string): SourceResult => ({ source, outcome, provenance, summary });
+ const redact=(value:unknown,secrets:string[]):unknown=>{
+  if(typeof value==='string')return secrets.filter(Boolean).reduce((text,secret)=>text.replaceAll(secret,'[REDACTED]'),value);
+  if(Array.isArray(value))return value.map(item=>redact(item,secrets));
+  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,item])=>[String(redact(key,secrets)),redact(item,secrets)]));
+  return value;
+ };
+ const boundCollect=async(input:InvestigationInput,source:'prometheus'|'loki'|'tempo'|'github'):Promise<SourceResult>=>{
+  try{
+   const connection=await connections!.resolve(input.workspaceId,input.serviceId,source);
+   if(!connection){await write(input,source,'not-configured',null,{reason:'No enabled workspace connection is mapped to this service.'});return result(source,'not-configured',null,'Map an enabled workspace connection to this service.');}
+   const metadata={connectorId:connection.id,configVersion:connection.configVersion,collectedAt:new Date().toISOString()};
+   let detail:unknown,outcome:SourceOutcome='ok',severity:string|undefined,covered:boolean|undefined;
+   if(source==='loki'){const logs=await collectBoundLogs(connection);detail={...logs,...metadata};if(!logs.lines.length)outcome='empty';}
+   else if(source==='tempo'){const traces=await collectBoundTraces(connection);detail={...traces,...metadata};if(!traces.traces.length)outcome='empty';}
+   else if(source==='github'){
+    if(!connection.secret.token){await write(input,source,'not-configured',null,{...metadata,reason:'Read credential is required.'});return result(source,'not-configured',null,'GitHub read credential is required.');}
+    const owner=encodeURIComponent(String(connection.mapping.owner)),repo=encodeURIComponent(String(connection.mapping.repo));
+    const commits=await new ConnectorHttpClient().json(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=20`,{authorization:`Bearer ${connection.secret.token}`,accept:'application/vnd.github+json','user-agent':'Sentinel'}) as unknown;
+    if(!Array.isArray(commits)||commits.some(row=>typeof row?.sha!=='string'||typeof row?.commit?.message!=='string'))throw new ConnectorHttpError('invalid-response');
+    detail={...metadata,commits:commits.slice(0,20)};if(!commits.length)outcome='empty';
+   }else{
+    const targets=await db.inWorkspace(input.workspaceId,async client=>(await client.query('SELECT availability_target,latency_target_ms FROM service_slos WHERE workspace_id=$1 AND service_id=$2',[input.workspaceId,input.serviceId])).rows[0]);
+    if(!targets){await write(input,source,'not-configured',null,{...metadata,reason:'Service SLO targets are required.'});return result(source,'not-configured',null,'Configure service SLO targets.');}
+    const metrics=await collectBoundMetrics(connection,{availabilityTarget:targets.availability_target,latencyTargetMs:targets.latency_target_ms});
+    const qualifies=(seconds:number,latency=false)=>metrics.coverage.find(window=>window.windowSeconds===seconds)?.inputs.filter(row=>latency?row.input==='latencyCoverageQuery':row.input!=='latencyCoverageQuery').every(row=>row.covered)??false;
+    const qualified=qualifiedSeverity(metrics.sample,{fiveMinutes:qualifies(300),tenMinutes:qualifies(600,true),thirtyMinutes:qualifies(1800),oneHour:qualifies(3600),sixHours:qualifies(21600)});
+    covered=metrics.coverage.every(window=>window.inputs.every(row=>row.covered));severity=qualified??'sev4';outcome=covered?'ok':'uncovered';detail={...metrics.sample,...metadata,coverage:metrics.coverage,queryWindow:metrics.queryWindow,severityQualified:qualified!==null,windowCovered:covered};
+   }
+   await write(input,source,outcome,'live',redact(detail,Object.values(connection.secret)),{severity,observedAt:new Date().toISOString(),windowCovered:covered});
+   return result(source,outcome,'live',outcome==='empty'?`${source} returned no observations for this service.`:outcome==='uncovered'?'SLI input coverage is incomplete; severity requires qualifying windows.':`${source} service evidence recorded.`);
+  }catch(error){const code=error instanceof ConnectorHttpError||error instanceof SloReadError?error.code:'collection-failed';const outcome=code==='denied'?'denied':code==='stale'?'stale':code==='empty'?'empty':'unavailable';await write(input,source,outcome,'live',{errorCode:code,reason:'Workspace provider read failed.'});return result(source,outcome,'live',`Workspace provider read failed (${code}).`);}
+ };
  return {
   async recordSourceFailure(input: InvestigationInput, source: SourceName) {
    await write(input, source, 'unavailable', null, { reason: 'Evidence collection failed after retries.' });
   },
   async collectPrometheus(input: InvestigationInput): Promise<SourceResult> {
+   if(connections)return boundCollect(input,'prometheus');
    const mapping = await db.inWorkspace(input.workspaceId, async client => {
     const incident = await client.query('SELECT id, created_at FROM incidents WHERE workspace_id=$1 AND id=$2 AND service_id=$3', [input.workspaceId, input.incidentId, input.serviceId]);
     if (!incident.rowCount) throw new Error('Incident not found');
@@ -92,6 +128,7 @@ export function createActivities(db: SentinelDatabase) {
    }
   },
   async collectLoki(input: InvestigationInput): Promise<SourceResult> {
+   if(connections)return boundCollect(input,'loki');
    if (!process.env.LOKI_URL) { await write(input, 'loki', 'not-configured', null, { reason: 'Loki is not configured.' }); return result('loki', 'not-configured', null, 'Loki is not configured.'); }
    try {
     const end = Date.now();
@@ -106,6 +143,7 @@ export function createActivities(db: SentinelDatabase) {
    }
   },
   async collectTempo(input: InvestigationInput): Promise<SourceResult> {
+   if(connections)return boundCollect(input,'tempo');
    if (!process.env.TEMPO_URL) { await write(input, 'tempo', 'not-configured', null, { reason: 'Tempo is not configured.' }); return result('tempo', 'not-configured', null, 'Tempo is not configured.'); }
    try {
     const end = Math.floor(Date.now() / 1000);
@@ -120,6 +158,7 @@ export function createActivities(db: SentinelDatabase) {
    }
   },
   async collectGithub(input: InvestigationInput): Promise<SourceResult> {
+   if(connections)return boundCollect(input,'github');
    if (!process.env.GITHUB_TOKEN || !process.env.GITHUB_REPOSITORY) {
     await write(input, 'github', 'not-configured', null, { reason: 'GitHub is not configured.' });
     return result('github', 'not-configured', null, 'GitHub is not configured.');
@@ -165,6 +204,9 @@ export function createActivities(db: SentinelDatabase) {
    });
   },
   async notifyNtfy(input: InvestigationInput, outcome: InvestigationResult) {
+   // Workspace mode must use the forthcoming approved subscription ledger;
+   // process-wide notification destinations are never a fallback.
+   if(connections)return;
    if (!process.env.NTFY_URL || !process.env.NTFY_TOPIC) return;
    await publishNtfy(process.env.NTFY_URL, process.env.NTFY_TOPIC, `incident ${input.incidentId} ${outcome.status}`);
   },

@@ -173,7 +173,7 @@ export function missingEnv(manifest: ConnectorManifest, env: NodeJS.ProcessEnv =
 
 export { PrometheusClient } from './prometheus';
 export type { PrometheusConfig, PrometheusSample } from './prometheus';
-export { collectSlo, windowCovered } from './slo';
+export { collectSlo, windowCovered, SloReadError } from './slo';
 export { assessCoverage } from './coverage';
 export type { SloMapping } from './slo';
 export { GitHubReadClient } from './github';

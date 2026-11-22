@@ -8,7 +8,7 @@ try {
  await client.query('BEGIN');
  await client.query("SELECT pg_advisory_xact_lock(75489321)");
  await client.query('CREATE TABLE IF NOT EXISTS sentinel_migrations(version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
- for (const version of ['0001_foundation', '0002_identity', '0003_telemetry', '0004_investigation_jobs', '0005_audit_versions', '0006_passkeys', '0007_webhooks', '0008_approval_plans', '0009_proof_reservations', '0010_proof_binding', '0011_ecs_evidence', '0012_incident_service_binding', '0013_change_hypotheses', '0014_evidence_sources']) {
+ for (const version of ['0001_foundation', '0002_identity', '0003_telemetry', '0004_investigation_jobs', '0005_audit_versions', '0006_passkeys', '0007_webhooks', '0008_approval_plans', '0009_proof_reservations', '0010_proof_binding', '0011_ecs_evidence', '0012_incident_service_binding', '0013_change_hypotheses', '0014_evidence_sources', '0015_connector_instances', '0016_connector_queue_capacity', '0017_evidence_outcomes', '0018_connector_admission_guard']) {
  if (!(await client.query('SELECT version FROM sentinel_migrations WHERE version=$1', [version])).rowCount) {
   await client.query(await readFile(new URL(`../migrations/${version}.sql`, import.meta.url), 'utf8'));
   await client.query('INSERT INTO sentinel_migrations(version) VALUES($1)', [version]);

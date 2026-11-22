@@ -1,7 +1,23 @@
 FROM node:24-bookworm-slim AS base
 WORKDIR /app
+COPY package.json package-lock.json ./
+COPY packages/approvals/package.json ./packages/approvals/package.json
+COPY packages/auth/package.json ./packages/auth/package.json
+COPY packages/connectors/package.json ./packages/connectors/package.json
+COPY packages/contracts/package.json ./packages/contracts/package.json
+COPY packages/db/package.json ./packages/db/package.json
+COPY packages/engine/package.json ./packages/engine/package.json
+COPY packages/fixtures/package.json ./packages/fixtures/package.json
+COPY packages/mcp-read/package.json ./packages/mcp-read/package.json
+COPY packages/policy/package.json ./packages/policy/package.json
+COPY packages/workflows/package.json ./packages/workflows/package.json
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/cli/package.json ./apps/cli/package.json
+COPY apps/console/package.json ./apps/console/package.json
+COPY apps/worker-read/package.json ./apps/worker-read/package.json
+COPY apps/workload/package.json ./apps/workload/package.json
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
-RUN npm ci
 
 FROM node:24-bookworm-slim AS workload
 WORKDIR /app
