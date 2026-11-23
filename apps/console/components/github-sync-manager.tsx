@@ -1,0 +1,18 @@
+'use client';
+import { useEffect,useState } from 'react';
+interface Connection {id:string;name:string;provider:string;configVersion:number;mode:string}
+interface Report {requests:{id:string;status:string;record_count:number;created_at:string}[];resources:{service_id:string;owner:string;repo:string;capability:string;status:string;last_success_at:string|null;record_count:string;error_code:string|null;next_due_at:string}[]}
+function ConnectionSync({workspaceId,connection,canSync}:{workspaceId:string;connection:Connection;canSync:boolean}){
+ const [report,setReport]=useState<Report|null>(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+ const endpoint=`/api/workspaces/${workspaceId}/connectors/${connection.id}/sync`;
+ useEffect(()=>{let active=true;setReport(null);setMessage('');const load=async()=>{try{const response=await fetch(endpoint,{cache:'no-store'});if(!response.ok)throw new Error('Unable to load synchronization status');const value=await response.json();if(active)setReport(value);}catch(error){if(active)setMessage(error instanceof Error?error.message:'Unable to load synchronization status');}};void load();const timer=setInterval(load,5000);return()=>{active=false;clearInterval(timer);};},[endpoint,connection.configVersion]);
+ async function sync(){setBusy(true);try{const response=await fetch(endpoint,{method:'POST'}),body=await response.json();if(!response.ok)throw new Error(body.error??'Unable to queue synchronization');setMessage('Synchronization requested. Pages and service-specific changes are persisted before continuing.');}catch(error){setMessage(error instanceof Error?error.message:'Unable to queue synchronization');}finally{setBusy(false);}}
+ return <article className="sc-card sc-detail-pad"><div className="sc-heading"><div><h3>{connection.name}</h3><p>{connection.mode==='off'?'Connection disabled. Historical synchronization results are preserved.':'Five-minute polling, restart-safe cursors and explicit repository mappings.'}</p></div>{canSync&&<button className="sc-button sc-secondary" disabled={busy||connection.mode!=='live'} onClick={sync}>{busy?'Requesting…':'Sync GitHub'}</button>}</div>
+  <p role="status">{message}</p>{report?.requests[0]&&<p>Latest requested sync: {report.requests[0].status} · {report.requests[0].record_count} records</p>}
+  {!report?<p>Loading synchronization state…</p>:!report.resources.length?<p>Map this connection to a service repository to start polling. Missing credentials remain not configured.</p>:<div style={{overflowX:'auto'}}><table className="sc-table"><thead><tr><th>Repository</th><th>Capability</th><th>State</th><th>Last completed read</th><th>Records</th><th>Diagnostic</th></tr></thead><tbody>{report.resources.map(row=><tr key={`${row.service_id}:${row.owner}/${row.repo}:${row.capability}`}><td>{row.owner}/{row.repo}</td><td>{row.capability}</td><td>{row.error_code==='credential-required'?'Not configured':row.status}</td><td>{row.last_success_at?new Date(row.last_success_at).toLocaleString():'Not verified'}</td><td>{row.record_count}</td><td>{row.error_code??'—'}</td></tr>)}</tbody></table></div>}
+ </article>;
+}
+export function GitHubSyncManager({workspaceId,connections,canSync}:{workspaceId:string;connections:Connection[];canSync:boolean}){
+ const github=connections.filter(row=>row.provider==='github');if(!workspaceId||!github.length)return null;
+ return <section aria-label="GitHub synchronization"><h2>Repository synchronization</h2>{github.map(connection=><ConnectionSync key={`${workspaceId}:${connection.id}`} workspaceId={workspaceId} connection={connection} canSync={canSync}/>)}</section>;
+}

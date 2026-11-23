@@ -52,11 +52,14 @@ export class ConnectorHttpClient {
     else callback(null,addresses[0].address,addresses[0].family);
    }},response=>{
     const status=response.statusCode??0;
+    if(status===304&&(options.method??'GET')==='GET'){response.destroy();resolve({status,headers:response.headers,text:''});return;}
     if(status>=300&&status<400){response.destroy();reject(new ConnectorHttpError('redirect-rejected',status));return;}
     if(status<200||status>=300){
      const rawRetry=response.headers['retry-after'];let retryAfterMs:number|undefined;
      if(typeof rawRetry==='string'){const seconds=Number(rawRetry);retryAfterMs=Number.isFinite(seconds)?Math.max(0,seconds*1000):Math.max(0,Date.parse(rawRetry)-Date.now());if(!Number.isFinite(retryAfterMs))retryAfterMs=undefined;}
-     response.destroy();reject(new ConnectorHttpError(status===401||status===403?'denied':status===429?'rate-limited':'unavailable',status,retryAfterMs));return;
+     const limited=status===429||(status===403&&(response.headers['x-ratelimit-remaining']==='0'||rawRetry!==undefined));
+     if(limited&&retryAfterMs===undefined){const reset=Number(response.headers['x-ratelimit-reset']);if(Number.isFinite(reset)&&reset>0)retryAfterMs=Math.max(0,reset*1000-Date.now());}
+     response.destroy();reject(new ConnectorHttpError(limited?'rate-limited':status===401||status===403?'denied':'unavailable',status,retryAfterMs));return;
     }
     if(Number(response.headers['content-length']??0)>this.limit){response.destroy();reject(new ConnectorHttpError('response-too-large'));return;}
     const chunks:Buffer[]=[];let size=0;
@@ -74,7 +77,7 @@ export class ConnectorHttpClient {
    if(Date.now()>=deadline)throw new ConnectorHttpError('unavailable');
    try{return await this.once(url,options,Math.max(1,Math.min(this.timeout,deadline-Date.now())));}
    catch(error){
-    if(!(error instanceof ConnectorHttpError)||options.method==='POST'||attempt>=2||!['unavailable','rate-limited'].includes(error.code)||(error.status!==undefined&&error.status<500&&error.status!==429))throw error;
+    if(!(error instanceof ConnectorHttpError)||options.method==='POST'||attempt>=2||!['unavailable','rate-limited'].includes(error.code)||(error.status!==undefined&&error.status<500&&error.code!=='rate-limited'))throw error;
     const delay=error.retryAfterMs??250*2**attempt;
     if(Date.now()+delay>=deadline)throw error;
     await new Promise(resolve=>setTimeout(resolve,delay));

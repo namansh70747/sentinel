@@ -48,3 +48,9 @@ it('canonicalizes approved origins before comparing normalized provider URLs',as
  const client=new ConnectorHttpClient({allowedPrivateOrigins:[url+'/']});
  expect(await client.json(url)).toEqual({ok:true});
 });
+it('supports conditional reads without treating 304 as a redirect or retrying rate-limit denials blindly',async()=>{
+ let calls=0;const url=await serve((request,response)=>{calls++;if(request.headers['if-none-match']==='"version-one"'){response.writeHead(304,{etag:'"version-one"'});response.end();return;}response.writeHead(403,{'x-ratelimit-remaining':'0','x-ratelimit-reset':String(Math.ceil(Date.now()/1000)+60)});response.end();});
+ const client=new ConnectorHttpClient({allowedPrivateOrigins:[url]});
+ expect(await client.get(url,{'if-none-match':'"version-one"'})).toMatchObject({status:304,text:''});
+ await expect(client.get(url)).rejects.toMatchObject({code:'rate-limited',status:403});expect(calls).toBe(2);
+});

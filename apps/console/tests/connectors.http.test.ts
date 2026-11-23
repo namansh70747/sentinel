@@ -16,6 +16,7 @@ describe.skipIf(!base||!process.env.TEST_DATABASE_URL)('connector HTTP authoriza
  afterAll(async()=>{
   if(workspaceId)await db.inWorkspace(workspaceId,client=>client.query("UPDATE connector_tests SET status='failed',finished_at=now(),result=$1 WHERE status IN ('queued','running')",[{outcome:'not-configured',capability:'test-fixture',recordCount:0}]));
   if(workspaceId)await db.inWorkspace(workspaceId,client=>client.query("UPDATE notification_deliveries SET status='failed',finished_at=now(),error_code='test-fixture' WHERE status='queued'"));
+  if(workspaceId)await db.inWorkspace(workspaceId,client=>client.query("UPDATE connector_sync_requests SET status='failed',finished_at=now() WHERE status IN ('queued','running')"));
   await db.close();
  });
  it('protects credentials, enforces versions and tenant ownership, and queues tests',async()=>{
@@ -58,5 +59,17 @@ describe.skipIf(!base||!process.env.TEST_DATABASE_URL)('connector HTTP authoriza
   expect((await fetch(root+'/notification-deliveries',{headers:headers(1)})).status).toBe(404);
   const history=await fetch(root+'/notification-deliveries',{headers:headers(2)});expect(history.status).toBe(200);expect(await history.text()).not.toContain('private-fixture-notification-token');
   expect((await fetch(root+`/notification-subscriptions/${subscription.id}`,{method:'PATCH',headers:headers(),body:JSON.stringify({enabled:false})})).status).toBe(200);
+ },30000);
+ it('authorizes manual GitHub synchronization separately from read-only status access',async()=>{
+  const root=`${base}/api/workspaces/${workspaceId}`;
+  const connection=await(await fetch(root+'/connectors',{method:'POST',headers:headers(),body:JSON.stringify({provider:'github',name:'Unconfigured GitHub fixture',mode:'live',config:{}})})).json();
+  const binding=await fetch(root+`/services/${serviceId}/connector-bindings/github`,{method:'PUT',headers:headers(),body:JSON.stringify({connectorId:connection.id,expectedVersion:1,mapping:{owner:'team',repo:'checkout'}})});expect(binding.status).toBe(200);
+  const endpoint=root+`/connectors/${connection.id}/sync`;
+  expect((await fetch(endpoint,{method:'POST',headers:headers(2)})).status).toBe(403);
+  const response=await fetch(endpoint,{method:'POST',headers:headers()});expect(response.status).toBe(202);const queued=await response.json();
+  expect((await(await fetch(endpoint,{method:'POST',headers:headers()})).json()).id).toBe(queued.id);
+  const viewed=await fetch(endpoint,{headers:headers(2)});expect(viewed.status).toBe(200);expect((await viewed.json()).resources).toHaveLength(3);
+  expect((await fetch(endpoint,{headers:headers(1)})).status).toBe(404);
+  expect((await fetch(root+`/services/${serviceId}/changes`,{headers:headers(2)})).status).toBe(200);
  },30000);
 });

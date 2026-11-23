@@ -121,8 +121,13 @@ Fresh verification during implementation:
    reconciled; new runs have a ten-minute execution timeout. Database/HTTP tests,
    completed-history replay and a real browser refresh passed. Legacy rows remain
    separately labelled. Cross-release archived-history fixtures remain to add.
-5. Add GitHub deployment/status/Actions/check adapters, incremental durable
-   reconciliation, conditional requests, five-minute polling and manual sync.
+5. GitHub commits, deployments/statuses, Actions and checks now have durable
+   service/repository reconciliation, conditional requests, five-minute polling
+   and authorized manual sync. Connection-wide rate backoff survives manual sync
+   and restart. Immutable observation history fences evidence to each frozen run
+   cutoff; bounded results explicitly report truncation. Real HTTP fixture tests
+   cover pagination, restart, separate repositories and CI status transitions.
+   A hosted read token has not been supplied; live GitHub acceptance remains pending.
 6. Approved version-bound subscriptions, outgoing deliveries/attempts ledger,
    separate communication worker, notification APIs/UI, ntfy ACL/token and actual
    receipt confirmation are implemented in migration 0020 and related modules.
@@ -153,3 +158,20 @@ integration and do not block testing local providers.
 - Private ntfy password/token locations: `.local/ntfy/password`, `.local/ntfy/token`.
   Re-running `dev:prepare-ntfy` preserves the generated credentials.
 - No Slack, GitHub Issues, AWS or company-account writes were performed.
+
+## GitHub synchronization checkpoint
+
+- Forward migrations 0021–0024 persist resource cursors, stable repository-prefixed
+  changes, manual requests, terminal child states and immutable observation history.
+- Least-privilege database full suite: 126 passed, 13 skipped. Integration command:
+  22 passed across ten suites. Skipped tests are not acceptance.
+- Root and console TypeScript checks passed. Updated Docker services built and started.
+- GitHub API version: `2026-03-10`. Read credentials are separate from future issue
+  publishing credentials. Missing tokens report not configured; no mock success.
+- Historical evidence uses observations recorded before the run cutoff. Earlier
+  rows begin history at migration time and are not backdated as verified data.
+- Remaining hosted gate: configure a read-only token in the workspace connection UI,
+  bind an approved repository and verify all required capabilities against GitHub.
+- Earlier peer reviews identified defects fixed with regression coverage. The final
+  follow-up reviewer was unavailable due to its usage limit; the latest history and
+  connection-backoff changes have automated verification, not a completed final peer review.

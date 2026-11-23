@@ -10,7 +10,8 @@
     "./http": "./src/http.ts",
     "./connection-test": "./src/connection-test.ts",
     "./bound-telemetry": "./src/bound-telemetry.ts",
-    "./notification-delivery": "./src/notification-delivery.ts"
+    "./notification-delivery": "./src/notification-delivery.ts",
+    "./github-sync": "./src/github-sync.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ecs": "^3.1161.0",

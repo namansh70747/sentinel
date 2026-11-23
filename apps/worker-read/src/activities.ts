@@ -8,6 +8,7 @@ import type { ConnectorRepository } from '@sentinel/db/connectors';
 import { collectBoundLogs,collectBoundTraces,collectBoundMetrics } from '@sentinel/connectors/bound-telemetry';
 import { ConnectorHttpClient,ConnectorHttpError } from '@sentinel/connectors/http';
 import { InvestigationRepository,type RunIdentity } from '@sentinel/db/investigations';
+import { GitHubSyncRepository } from '@sentinel/db/github-sync';
 
 export function readEcsMode(value = process.env.SENTINEL_ECS_MODE): 'off' | 'simulated' | 'live' {
  if (value !== 'off' && value !== 'simulated' && value !== 'live') throw new Error('SENTINEL_ECS_MODE must be off, simulated, or live');
@@ -47,16 +48,21 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    const connection=await connections!.resolve(input.workspaceId,input.serviceId,source,input.runId);
    if(!connection){await write(input,source,'not-configured',null,{reason:'No enabled workspace connection is mapped to this service.'});return result(source,'not-configured',null,'Map an enabled workspace connection to this service.');}
    const metadata={connectorId:connection.id,configVersion:connection.configVersion,collectedAt:new Date().toISOString()};
-   let detail:unknown,outcome:SourceOutcome='ok',severity:string|undefined,covered:boolean|undefined;
+   let detail:unknown,outcome:SourceOutcome='ok',severity:string|undefined,covered:boolean|undefined,sourceObservedAt:string|undefined;
    const observedAt=connection.observedAt?.getTime()??Date.now();
    if(source==='loki'){const logs=await collectBoundLogs(connection,http,observedAt);detail={...logs,...metadata};if(!logs.lines.length)outcome='empty';}
    else if(source==='tempo'){const traces=await collectBoundTraces(connection,http,observedAt);detail={...traces,...metadata};if(!traces.traces.length)outcome='empty';}
    else if(source==='github'){
     if(!connection.secret.token){await write(input,source,'not-configured',null,{...metadata,reason:'Read credential is required.'});return result(source,'not-configured',null,'GitHub read credential is required.');}
-    const owner=encodeURIComponent(String(connection.mapping.owner)),repo=encodeURIComponent(String(connection.mapping.repo));
-    const commits=await http.json(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=20`,{authorization:`Bearer ${connection.secret.token}`,accept:'application/vnd.github+json','user-agent':'Sentinel'}) as unknown;
-    if(!Array.isArray(commits)||commits.some(row=>typeof row?.sha!=='string'||typeof row?.commit?.message!=='string'))throw new ConnectorHttpError('invalid-response');
-    detail={...metadata,commits:commits.slice(0,20)};if(!commits.length)outcome='empty';
+    const observations=await new GitHubSyncRepository(db).observations(input.workspaceId,input.serviceId,connection.id,connection.configVersion,String(connection.mapping.owner),String(connection.mapping.repo),observedAt);
+    const successful=observations.resources.filter(row=>row.last_success_at),failed=observations.resources.filter(row=>row.status==='failed');
+    const pending=observations.changesTruncated||observations.resourcesTruncated||observations.resources.some(row=>['pending','running','partial'].includes(row.status));
+    const stale=successful.some(row=>row.status!=='complete'&&observedAt-new Date(row.last_success_at).getTime()>600000);
+    if(!observations.resources.length||pending)outcome='uncovered';
+    else if(!successful.length)outcome=failed.length&&failed.every(row=>row.error_code==='denied')?'denied':'unavailable';
+    else if(failed.length===observations.resources.length)outcome=failed.every(row=>row.error_code==='denied')?'denied':'unavailable';else if(stale)outcome='stale';else if(pending||failed.length)outcome='uncovered';else if(!observations.changes.length)outcome='empty';
+    if(successful.length)sourceObservedAt=new Date(Math.max(...successful.map(row=>new Date(row.last_success_at).getTime()))).toISOString();
+    detail={...metadata,...observations,collection:'persisted-provider-sync',partial:pending||failed.length>0,reason:!observations.resources.length?'Repository synchronization has not run yet.':undefined};
    }else{
     const targets=input.runId?(connection.mapping.availabilityTarget&&connection.mapping.latencyTargetMs?{availability_target:Number(connection.mapping.availabilityTarget),latency_target_ms:Number(connection.mapping.latencyTargetMs)}:null):await db.inWorkspace(input.workspaceId,async client=>(await client.query('SELECT availability_target,latency_target_ms FROM service_slos WHERE workspace_id=$1 AND service_id=$2',[input.workspaceId,input.serviceId])).rows[0]);
     if(!targets){await write(input,source,'not-configured',null,{...metadata,reason:'Service SLO targets are required.'});return result(source,'not-configured',null,'Configure service SLO targets.');}
@@ -65,8 +71,9 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
     const qualified=qualifiedSeverity(metrics.sample,{fiveMinutes:qualifies(300),tenMinutes:qualifies(600,true),thirtyMinutes:qualifies(1800),oneHour:qualifies(3600),sixHours:qualifies(21600)});
     covered=metrics.coverage.every(window=>window.inputs.every(row=>row.covered));severity=qualified??'sev4';outcome=covered?'ok':'uncovered';detail={...metrics.sample,...metadata,coverage:metrics.coverage,queryWindow:metrics.queryWindow,severityQualified:qualified!==null,windowCovered:covered};
    }
-   await write(input,source,outcome,'live',redact(detail,Object.values(connection.secret)),{severity,observedAt:new Date(observedAt).toISOString(),windowCovered:covered});
-   return result(source,outcome,'live',outcome==='empty'?`${source} returned no observations for this service.`:outcome==='uncovered'?'SLI input coverage is incomplete; severity requires qualifying windows.':`${source} service evidence recorded.`);
+   await write(input,source,outcome,'live',redact(detail,Object.values(connection.secret)),{severity,observedAt:source==='github'?sourceObservedAt??null:new Date(observedAt).toISOString(),windowCovered:covered});
+   const summary=outcome==='ok'?`${source} service evidence recorded.`:outcome==='empty'?`${source} returned no observations for this service.`:outcome==='uncovered'?(source==='prometheus'?'SLI input coverage is incomplete; severity requires qualifying windows.':'GitHub synchronization is incomplete; per-capability outcomes accompany the persisted observations.'):`${source} evidence outcome is ${outcome}; review provider diagnostics.`;
+   return result(source,outcome,'live',summary);
   }catch(error){const code=error instanceof ConnectorHttpError||error instanceof SloReadError?error.code:'collection-failed';const outcome=code==='denied'?'denied':code==='stale'?'stale':code==='empty'?'empty':'unavailable';await write(input,source,outcome,'live',{errorCode:code,reason:'Workspace provider read failed.'});return result(source,outcome,'live',`Workspace provider read failed (${code}).`);}
  };
  return {

@@ -1,5 +1,5 @@
 import type { IncidentRecord } from "@sentinel/contracts";
-import { records, service, connectors } from "./records";
+import { records, service } from "./records";
 
 export type ViewEvent = { state: string; detail: string };
 export type ViewRank = {
@@ -56,16 +56,4 @@ export function viewIncidents(): ViewIncident[] {
 
 export function viewService() {
   return service;
-}
-
-export function viewConnectors() {
-  return connectors.map((item) => ({
-    id: item.id,
-    name: item.name,
-    category: item.category,
-    capabilities: item.capabilities,
-    authEnv: item.authEnv,
-    writes: item.writes,
-    ready: item.authEnv.every((key) => Boolean(process.env[key])),
-  }));
 }
