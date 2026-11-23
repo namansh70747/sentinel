@@ -40,7 +40,7 @@ backup location. Connector credentials use AES-256-GCM, authenticated with both
 workspace and connector identity. Losing the key makes those credentials
 unrecoverable. Preparation refuses an invalid existing key rather than replacing
 it. Restore database and its matching key together, retain mode 0600, then test
-connections again. Backup/restore acceptance is still outstanding.
+connections again. Local PostgreSQL/connector-key backup and isolated restore acceptance passed; other service volumes require separate backups.
 
 The key is a Docker secret, excluded from the image build context. APIs return
 credential-presence metadata only. Do not copy `.local/`, provider tokens, Slack
@@ -266,3 +266,44 @@ MCP checkpoint validation: full least-privilege database suite 127 passed / 14
 skipped; integration suite 25 passed across twelve suites. Skips are not acceptance.
 Root/console TypeScript and dependency audit passed. Local doctor verified Docker,
 private files, memory allocation and both saved database credentials.
+
+## Local backup/recovery implementation slice
+
+- [x] Authenticated encrypted archive containing a consistent PostgreSQL dump and
+  its matching connector encryption key; generated private recovery key kept separate.
+- [x] Export a database snapshot so the manifest and dump describe the same state.
+- [x] Restore only into a newly generated temporary database, compare persisted
+  record counts and decrypt restored provider envelopes without printing credentials.
+- [x] Corruption/wrong-key tests, actual restore acceptance and explicit limitations.
+
+## Local database backup and recovery
+
+```sh
+npm run dev:backup
+npm run dev:test-recovery
+# Optionally select an existing archive basename from .local/backups:
+npm run dev:test-recovery -- backup-YYYY-MM-DDTHH-MM-SS.sentinel
+```
+
+Archives are authenticated AES-256-GCM files under ignored `.local/backups/`.
+The generated 32-byte recovery key is `.local/backup-recovery-key` (0600). Store
+that key separately from the encrypted archive. The archive contains the matching
+connector encryption key, a PostgreSQL custom dump and an integrity/count manifest.
+Never commit or upload either private file through the application.
+
+The dump and 16-table count manifest use one exported repeatable-read snapshot.
+Recovery acceptance creates only a random `sentinel_recovery_<uuid>` database;
+it never accepts a live restore/drop database name. It compares all manifest
+counts and verifies decryption of restored provider credentials without printing
+them. The temporary database is cleaned even after a lost CREATE acknowledgement;
+cleanup failures report its generated name and preserve the original failure.
+
+Actual local acceptance on PostgreSQL 18.7 compared 16 tables and decrypted two
+credential envelopes. Wrong-key, tampering and cleanup-failure regressions passed.
+Peer review has no remaining Critical/Important findings in this slice.
+
+Limits: this local utility caps dumps at 64 MiB, encrypted payloads at 128 MiB and
+Docker database commands at 60 seconds. It verifies PostgreSQL and the connector
+key together. It does not back up Temporal, Keycloak, Grafana, Prometheus, Loki,
+Tempo or ntfy named volumes, and is not a tested cross-host disaster-recovery
+procedure. Preserve those provider volumes independently.

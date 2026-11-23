@@ -40,7 +40,9 @@
     "build:showcase": "node apps/showcase/build.mjs",
     "demo:showcase": "npm run build:showcase && node apps/showcase/serve.mjs",
     "dev:prepare-mcp": "tsx scripts/dev/prepare-mcp.ts",
-    "dev:mcp": "node scripts/dev/mcp.mjs"
+    "dev:mcp": "node scripts/dev/mcp.mjs",
+    "dev:backup": "tsx scripts/dev/backup.ts create",
+    "dev:test-recovery": "tsx scripts/dev/backup.ts test"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
