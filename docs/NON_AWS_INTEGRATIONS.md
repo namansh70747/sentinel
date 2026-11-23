@@ -215,3 +215,54 @@ versions only; more than 50 results is explicitly marked truncated. Raw Markdown
 is escaped as text and is never executed or interpreted as trusted agent instructions.
 
 Mobile browser acceptance at 390 px passed without page overflow. A browser-discovered HTML pattern incompatibility was fixed before the checkpoint. Long-history scale acceptance and broader platform restart/recovery gates remain separate.
+
+## MCP implementation slice
+
+- [x] Forward migration and token repository: hashed, expiring local credentials
+  bound to an existing identity and workspace; recheck membership/revocation per call.
+- [x] Official SDK STDIO server: bounded incident/evidence/audit/runbook reads,
+  strict tool inputs, no write tools and no arbitrary workspace selection.
+- [x] Private local prepare/start commands; preserve valid existing credentials,
+  never emit tokens on stdout (reserved for protocol messages).
+- [x] Real SDK subprocess client verifies initialization, discovery, permitted reads,
+  foreign-workspace denial and denial after token revocation.
+
+## MCP operator handoff
+
+```sh
+npm run dev:prepare-mcp
+# Run the protocol server directly; stdout must contain JSON-RPC only:
+node scripts/dev/mcp.mjs
+# Explicitly revoke/replace a credential after expiry or a partial-file recovery:
+npm run dev:prepare-mcp -- --rotate
+```
+
+For an MCP desktop client use command `node`, args `["scripts/dev/mcp.mjs"]` and
+working directory equal to the Sentinel repository. Use `npm run --silent dev:mcp`
+if the client requires npm. Normal npm banners must not enter the protocol stream.
+No HTTP endpoint or automatic public tunnel is enabled.
+
+The token lives in `.local/mcp/token` (0600); metadata lives in
+`.local/mcp/config.json`. Tokens last seven days and are stored only as SHA-256
+hashes in PostgreSQL. Every call rechecks workspace binding, current membership,
+expiry and revocation. Missing-token/config recovery fails closed unless explicit
+rotation revokes prior credentials. Preparation preserves existing valid pairs.
+Do not commit, paste or share the token or local database credentials.
+
+Tools: `list_incidents`, `get_incident`, `read_audit`, `search_runbooks`,
+`get_runbook`. Writes/approvals are absent. Reads are bounded and paginate incident
+and audit lists. Oversized source detail is explicitly omitted, rather than silently
+truncated. Runbook content remains untrusted reference data.
+
+Implementation uses the [official TypeScript SDK STDIO transport](https://github.com/modelcontextprotocol/typescript-sdk/blob/1.32.2/docs/server.md).
+SDK version 1.32.2 and patched Zod 4.6.7 passed npm audit with zero vulnerabilities.
+Actual SDK subprocess acceptance passed authorization, all five read tools, audit
+pagination, unknown-write/oversized-limit rejection, membership removal, expiry,
+revocation and missing-file rotation. Local product acceptance returned five real
+incidents and the imported runbook. Peer review has no remaining Critical/Important
+findings in this slice.
+
+MCP checkpoint validation: full least-privilege database suite 127 passed / 14
+skipped; integration suite 25 passed across twelve suites. Skips are not acceptance.
+Root/console TypeScript and dependency audit passed. Local doctor verified Docker,
+private files, memory allocation and both saved database credentials.

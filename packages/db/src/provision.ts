@@ -29,5 +29,6 @@ try {
  await client.query('GRANT SELECT,INSERT,UPDATE ON github_sync_resources,github_changes,connector_sync_requests TO sentinel_app');
  await client.query('GRANT SELECT,INSERT,UPDATE ON runbooks TO sentinel_app');
  await client.query('GRANT SELECT,INSERT ON runbook_versions,runbook_service_links TO sentinel_app');
+ await client.query('GRANT SELECT,INSERT,UPDATE ON mcp_access_tokens TO sentinel_app');
  await client.query('COMMIT');console.log('Least-privilege runtime database role provisioned. Existing role credentials are preserved.');
 }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();await pool.end();}

@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "version": "0.1.0",
-  "description": "Sentinel — agentic SRE control plane for AWS and any observability stack.",
+  "description": "Sentinel \u2014 agentic SRE control plane for AWS and any observability stack.",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -38,7 +38,9 @@
     "dev:console": "node scripts/run.mjs console dev",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build:showcase": "node apps/showcase/build.mjs",
-    "demo:showcase": "npm run build:showcase && node apps/showcase/serve.mjs"
+    "demo:showcase": "npm run build:showcase && node apps/showcase/serve.mjs",
+    "dev:prepare-mcp": "tsx scripts/dev/prepare-mcp.ts",
+    "dev:mcp": "node scripts/dev/mcp.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",

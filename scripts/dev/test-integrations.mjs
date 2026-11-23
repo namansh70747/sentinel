@@ -27,8 +27,8 @@ try{
   await new Promise(resolve=>setTimeout(resolve,500));
  }
  if(!ready)throw new Error('Test console readiness timed out');
- await run('npx',['vitest','run','packages/db/src/connectors.test.ts','packages/db/src/investigations.test.ts','packages/db/src/notifications.test.ts','packages/db/src/github-sync.test.ts','packages/db/src/runbooks.test.ts','apps/console/tests/connectors.http.test.ts','apps/worker-read/src/connector-tests.test.ts','apps/worker-read/src/bound-activities.test.ts','apps/worker-read/src/run-dispatch.test.ts','apps/worker-read/src/github-sync.test.ts','apps/worker-communication/src/processor.test.ts'],env);
- console.log('Local connector database, HTTP authorization and queued capability checks passed. Hosted publishing and full telemetry acceptance are separate gates.');
+ await run('npx',['vitest','run','packages/db/src/connectors.test.ts','packages/db/src/investigations.test.ts','packages/db/src/notifications.test.ts','packages/db/src/github-sync.test.ts','packages/db/src/runbooks.test.ts','packages/mcp-read/src/server.test.ts','apps/console/tests/connectors.http.test.ts','apps/worker-read/src/connector-tests.test.ts','apps/worker-read/src/bound-activities.test.ts','apps/worker-read/src/run-dispatch.test.ts','apps/worker-read/src/github-sync.test.ts','apps/worker-communication/src/processor.test.ts'],env);
+ console.log('Local connector, runbook and MCP database/protocol checks, HTTP authorization and queued capability checks passed. Hosted publishing and full telemetry acceptance are separate gates.');
 }finally{
  server.kill('SIGTERM');
  await new Promise(resolve=>{if(server.exitCode!==null)return resolve();const timer=setTimeout(()=>{server.kill('SIGKILL');resolve();},5000);server.once('exit',()=>{clearTimeout(timer);resolve();});});
