@@ -42,7 +42,11 @@
     "dev:prepare-mcp": "tsx scripts/dev/prepare-mcp.ts",
     "dev:mcp": "node scripts/dev/mcp.mjs",
     "dev:backup": "tsx scripts/dev/backup.ts create",
-    "dev:test-recovery": "tsx scripts/dev/backup.ts test"
+    "dev:test-recovery": "tsx scripts/dev/backup.ts test",
+    "dev:kubernetes": "node scripts/dev/kubernetes.mjs up",
+    "dev:kubernetes-stop": "node scripts/dev/kubernetes.mjs stop",
+    "dev:test-kubernetes": "node scripts/dev/kubernetes.mjs test",
+    "dev:import-kubernetes": "tsx scripts/dev/import-local-kubernetes.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",

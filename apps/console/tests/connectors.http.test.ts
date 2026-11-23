@@ -86,4 +86,16 @@ describe.skipIf(!base||!process.env.TEST_DATABASE_URL)('connector HTTP authoriza
   expect((await(await fetch(read+'?version=1',{headers:headers(2)})).json()).markdown).toBe(draft.markdown);
   expect((await fetch(endpoint,{method:'POST',headers:headers(),body:JSON.stringify({...draft,markdown:'x'.repeat(524289)})})).status).toBe(400);
  },30000);
+ it('protects Kubernetes observations and refuses company origins and namespace escalation',async()=>{
+  const root=`${base}/api/workspaces/${workspaceId}`,endpoint=root+`/services/${serviceId}/kubernetes-observations`;
+  expect((await fetch(endpoint,{headers:headers(2)})).status).toBe(200);
+  expect((await fetch(endpoint,{headers:headers(1)})).status).toBe(404);
+  expect((await fetch(endpoint,{method:'POST',headers:headers(2)})).status).toBe(403);
+  expect((await fetch(endpoint,{method:'POST',headers:headers()})).status).toBe(404);
+  const draft={provider:'kubernetes',name:'Local-only fixture',mode:'live',config:{endpoint:'https://company.example',namespace:'sentinel-demo'}};
+  expect((await fetch(root+'/connectors',{method:'POST',headers:headers(),body:JSON.stringify(draft)})).status).toBe(400);
+  const response=await fetch(root+'/connectors',{method:'POST',headers:headers(),body:JSON.stringify({...draft,config:{endpoint:'https://k3d-sentinel-local-server-0:6443',namespace:'sentinel-demo'}})});expect(response.status).toBe(201);const connection=await response.json();
+  const binding=root+`/services/${serviceId}/connector-bindings/kubernetes`;
+  expect((await fetch(binding,{method:'PUT',headers:headers(),body:JSON.stringify({connectorId:connection.id,expectedVersion:1,mapping:{namespace:'kube-system',labelSelector:'app=checkout'}})})).status).toBe(400);
+ },30000);
 });

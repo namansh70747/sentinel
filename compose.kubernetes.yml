@@ -1,0 +1,14 @@
+# Optional override: npm run dev:up -- --kubernetes. The owned k3d network must exist.
+services:
+  console:
+    networks: [default, observe, kubernetes]
+    environment:
+      SENTINEL_CONNECTOR_ALLOWED_ORIGINS: http://prometheus:9090,http://loki:3100,http://tempo:3200,http://grafana:3000,http://ntfy:80,https://k3d-sentinel-local-server-0:6443
+  worker-read:
+    networks: [default, observe, kubernetes]
+    environment:
+      SENTINEL_CONNECTOR_ALLOWED_ORIGINS: http://prometheus:9090,http://loki:3100,http://tempo:3200,http://grafana:3000,http://ntfy:80,https://k3d-sentinel-local-server-0:6443
+networks:
+  kubernetes:
+    external: true
+    name: k3d-sentinel-local

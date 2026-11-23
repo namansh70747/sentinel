@@ -1,0 +1,21 @@
+import { randomBytes,randomUUID } from 'node:crypto';
+import { afterAll,expect,it } from 'vitest';
+import { SentinelDatabase } from './index';
+import { ConnectorRepository } from './repositories/connectors';
+import { OperationalFindingsRepository } from './repositories/operational-findings';
+import { SecretVault } from '@sentinel/connectors/secrets';
+const db=process.env.TEST_DATABASE_URL?new SentinelDatabase(process.env.TEST_DATABASE_URL):null;
+afterAll(()=>db?.close());
+it.skipIf(!db)('isolates immutable operational snapshots and rejects cross-namespace service mappings',async()=>{
+ const workspace=randomUUID(),other=randomUUID(),service=randomUUID();await db!.pool.query('INSERT INTO workspaces(id,name) VALUES($1,$2),($3,$4)',[workspace,'Kubernetes observations',other,'Other']);
+ await db!.inWorkspace(workspace,c=>c.query("INSERT INTO services(workspace_id,id,name,owner,account_id,region,resource_arn) VALUES($1,$2,'checkout','test','000000000000','local','fixture')",[workspace,service]));
+ const connections=new ConnectorRepository(db!,new SecretVault(randomBytes(32))),repository=new OperationalFindingsRepository(db!);
+ const connection=await connections.create(workspace,'test',{provider:'kubernetes',name:'Reader',mode:'live',config:{endpoint:'https://k3d-sentinel-local-server-0:6443',namespace:'sentinel-demo'}},{token:'private-fixture-token'});
+ await expect(connections.bind(workspace,'test',service,'kubernetes',connection.id,1,{namespace:'kube-system',labelSelector:'app=checkout'})).rejects.toThrow('namespace');
+ await connections.bind(workspace,'test',service,'kubernetes',connection.id,1,{namespace:'sentinel-demo',labelSelector:'app=checkout'});
+ const id=randomUUID();await db!.inWorkspace(workspace,c=>c.query("INSERT INTO operational_findings(workspace_id,id,service_id,connector_id,config_version,provider,outcome,provenance,mapping,detail) VALUES($1,$2,$3,$4,1,'kubernetes','unavailable','live',$5,$6)",[workspace,id,service,connection.id,{namespace:'sentinel-demo',labelSelector:'app=checkout'},{errorCode:'fixture-unavailable'}]));
+ expect((await repository.read(workspace,service)).latest.id).toBe(id);expect((await repository.read(other,service)).latest).toBeNull();
+ await expect(db!.inWorkspace(workspace,c=>c.query('UPDATE operational_findings SET detail=$1 WHERE id=$2',[{},id]))).rejects.toThrow();
+ const resolved=await connections.resolve(workspace,service,'kubernetes');if(!resolved)throw Error('No binding');
+ await expect(repository.collect(workspace,'test',service,{...resolved,mapping:{namespace:'kube-system',labelSelector:'app=checkout'}})).rejects.toThrow('matching namespace');
+});

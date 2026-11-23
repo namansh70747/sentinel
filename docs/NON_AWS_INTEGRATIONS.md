@@ -100,7 +100,7 @@ Fresh verification during implementation:
   clearing were fixed during review. Repository scan found no generated private
   credentials in tracked or pending source files.
 
-## Remaining delivery gates, in dependency order
+## Delivery ledger and remaining gates, in dependency order
 
 1. Complete fresh/restart Docker acceptance, local login/logout, worker readiness,
    credential consistency checks, profile memory measurements and reproducible
@@ -137,9 +137,10 @@ Fresh verification during implementation:
    with a regression test, and the failed attempt was preserved. Slack adapter is
    implemented, but no hosted destination was provided or tested. Separate GitHub
    Issues credentials/workflow remain unfinished. Unknown sends never retry.
-7. Optional k3d, namespace-scoped Kubernetes reads, read-only Argo/Gitea fixtures,
-   isolated OpenTofu plan imports, Backstage, estimated OpenCost, Trivy, versioned
-   runbooks/FTS and authenticated workspace-scoped STDIO MCP.
+7. Optional k3d namespace reads/findings, versioned runbooks/FTS and authenticated
+   workspace-scoped STDIO MCP are implemented and locally verified as described
+   below. Kubernetes-to-Temporal evidence remains next. Read-only Argo/Gitea,
+   isolated OpenTofu imports, Backstage, estimated OpenCost and Trivy remain unfinished.
 8. Browser acceptance, hostile provider tests, restart persistence, memory
    measurements, key/database recovery and final provider-version report.
 
@@ -307,3 +308,81 @@ Docker database commands at 60 seconds. It verifies PostgreSQL and the connector
 key together. It does not back up Temporal, Keycloak, Grafana, Prometheus, Loki,
 Tempo or ntfy named volumes, and is not a tested cross-host disaster-recovery
 procedure. Preserve those provider volumes independently.
+
+## Core restart acceptance
+
+The dedicated local Compose project's PostgreSQL, Temporal, Keycloak, console,
+read worker and communication worker were restarted. Six groups of persisted
+identities/resources remained present, including connection versions, immutable
+investigation evidence, delivery records and runbook versions. After restart the
+read worker completed an actual Loki capability test (`verified-read`), and the
+communication worker observed a confirmed receipt on the already-approved local
+ntfy destination. No hosted destination was used. This verifies restart persistence,
+not a completely fresh-machine installation or all-volume disaster recovery.
+
+## Optional Kubernetes implementation slice
+
+- [x] Isolated Docker-backed k3d fixture, explicit local kubeconfig/context on every
+  kubectl call; never read or modify the operator's current company cluster.
+- [x] Namespace-only service account for pods, deployments, services and events;
+  actual Secret, write and foreign-namespace denial tests.
+- [x] Private short-lived reader token; normalized real fixture observations.
+- [x] Shared-transport adapter, encrypted workspace configuration, service mapping,
+  real capability test and product findings view before marking connected.
+
+The cluster/bootstrap slice alone will not satisfy the product connector gate.
+RBAC follows the [official namespace Role/RoleBinding guidance](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) and short-lived
+[service-account TokenRequest guidance](https://kubernetes.io/docs/concepts/security/service-accounts/).
+
+## Optional Kubernetes checkpoint
+
+```sh
+npm run dev:kubernetes
+npm run dev:up -- --kubernetes
+npm run dev:import-kubernetes
+npm run dev:test-kubernetes
+# Stop just the owned fixture cluster; preserve its resources:
+npm run dev:kubernetes-stop
+```
+
+The optional override joins console/read worker to the owned k3d network. Running
+core without that override does not certify the Kubernetes profile. The profile
+requires at least 7.5 GiB Docker allocation (6 GiB core budget plus a 1.5 GiB node
+cap). Measured fixture server memory was about 529 MiB plus a 7 MiB tools container;
+this is an idle snapshot, not a peak-load acceptance result.
+
+Verified versions: k3d 5.9.0, k3s 1.35.5-k3s1, fixture pause 3.10.1. Bootstrap always
+uses explicit local kubeconfig/context and checks the global kubeconfig digest is
+unchanged. Existing clusters require a matching repository ownership record and
+immutable Docker server-container ID. Failed/legacy creation metadata is not adopted.
+Private kubeconfigs and the 24-hour TokenRequest credential remain under
+`.local/kubernetes/`; the product receives only the encrypted namespace reader
+credential, never the administrator kubeconfig. Run preparation/import again to
+rotate an expiring reader. Existing service bindings and disabled modes are preserved.
+
+This initial bundle permits only `https://k3d-sentinel-local-server-0:6443` and
+`sentinel-demo`; company/public cluster targets are rejected server-side. The
+service mapping requires explicit equality labels such as `app=checkout`. The
+fixture service is an object-read example; the pause workload does not serve HTTP
+or telemetry. One deployment deliberately fails only inside the fixture namespace.
+
+Actual namespace read/denial acceptance passed: two pods, two deployments, one
+service and events; Secret reads and foreign namespace reads returned Forbidden,
+and deployment-write authorization returned no. Shared HTTPS transport retained
+DNS pinning, certificate validation, redirects/deadlines/size bounds and accepted
+the explicit public cluster CA without disabling TLS checks.
+
+The product container persisted 21 live records, including a real CrashLoopBackOff
+pod and a healthy 1/1-ready pod. Connector capability tests and service observations
+are separate. Observations are immutable, configuration/mapping-versioned, tenant
+scoped and expose actual read failures and pagination truncation. This slice uses
+on-demand service reads; adding Kubernetes to fresh Temporal investigation evidence
+and periodic reconciliation is the next slice, not yet claimed complete.
+
+Verification: 134 full-suite tests passed / 15 skipped; 27 authenticated integration
+tests passed. Two DB tests timed out while image builds competed for resources;
+after builds finished their focused rerun passed 9/9 and the full suite passed.
+Root/console TypeScript and focused peer review passed with no remaining
+Critical/Important findings.
+
+Real browser acceptance passed the queued Kubernetes capability (`verified-read`) and an authenticated on-demand service read. The mobile grid overflow found during browser testing was fixed; after rebuilding and reloading, the 390 px page stayed within its viewport while the findings table scrolled horizontally inside its card.

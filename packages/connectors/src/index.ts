@@ -114,7 +114,7 @@ export const CONNECTORS: ConnectorManifest[] = [
   c("port", "Port", "catalog", ["catalog"], ["PORT_CLIENT_ID", "PORT_CLIENT_SECRET"]),
   c("cortex", "Cortex", "catalog", ["catalog"], ["CORTEX_API_TOKEN"]),
   c("opslevel", "OpsLevel", "catalog", ["catalog"], ["OPSLEVEL_API_TOKEN"]),
-  c("kubernetes", "Kubernetes", "k8s", ["k8s"], [], true),
+  c("kubernetes", "Kubernetes", "k8s", ["k8s"], []),
   c("istio", "Istio", "k8s", ["k8s", "traces"], []),
   c("cert-manager", "cert-manager", "k8s", ["k8s"], []),
   c("kyverno", "Kyverno", "k8s", ["k8s", "security"], []),

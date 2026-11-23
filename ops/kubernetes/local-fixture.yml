@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sentinel-demo
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sentinel-reader
+  namespace: sentinel-demo
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sentinel-reader
+  namespace: sentinel-demo
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, events]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sentinel-reader
+  namespace: sentinel-demo
+subjects:
+  - kind: ServiceAccount
+    name: sentinel-reader
+    namespace: sentinel-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sentinel-reader
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-fixture
+  namespace: sentinel-demo
+  labels: {app: checkout}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: checkout, fixture: healthy}}
+  template:
+    metadata: {labels: {app: checkout, fixture: healthy}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: fixture
+          image: registry.k8s.io/pause:3.10.1
+          resources: {requests: {cpu: 5m, memory: 8Mi}, limits: {cpu: 100m, memory: 32Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-failure-fixture
+  namespace: sentinel-demo
+  labels: {app: checkout}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: checkout, fixture: failure}}
+  template:
+    metadata: {labels: {app: checkout, fixture: failure}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: fixture
+          image: registry.k8s.io/pause:3.10.1
+          command: [/sentinel-intentionally-missing-executable]
+          resources: {requests: {cpu: 5m, memory: 8Mi}, limits: {cpu: 100m, memory: 32Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkout-object-fixture
+  namespace: sentinel-demo
+  labels: {app: checkout}
+spec:
+  selector: {app: checkout}
+  ports: [{name: fixture, port: 8080, targetPort: 8080}]
+# Object-read fixture only: the pause image does not serve HTTP or telemetry.

@@ -11,6 +11,7 @@
     "./connection-test": "./src/connection-test.ts",
     "./bound-telemetry": "./src/bound-telemetry.ts",
     "./notification-delivery": "./src/notification-delivery.ts",
+    "./kubernetes":"./src/kubernetes.ts",
     "./github-sync": "./src/github-sync.ts"
   },
   "dependencies": {

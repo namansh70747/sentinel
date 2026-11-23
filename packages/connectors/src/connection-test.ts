@@ -1,14 +1,22 @@
 import { ConnectorHttpClient,ConnectorHttpError } from './http';
 import type { Provider } from './config';
+import { KubernetesReader } from './kubernetes';
 interface TestInput {provider:Provider;mode:string;config:Record<string,string|number>;secret:Record<string,string>}
 export interface CapabilityResult {outcome:'verified-read'|'reachable'|'empty'|'not-configured'|'unavailable'|'denied'|'unsupported';capability:string;recordCount:number;errorCode?:string}
-export async function testConnection(input:TestInput,http=new ConnectorHttpClient()):Promise<CapabilityResult>{
+export async function testConnection(input:TestInput,transport?:ConnectorHttpClient):Promise<CapabilityResult>{
+ const http=transport??new ConnectorHttpClient();
  const result=(outcome:CapabilityResult['outcome'],capability:string,recordCount=0,errorCode?:string)=>({outcome,capability,recordCount,...(errorCode?{errorCode}:{})});
  if(input.mode!=='live')return result('not-configured','connection-test',0,'connector-disabled');
  const headers:Record<string,string>={};if(input.secret.token)headers.authorization=`Bearer ${input.secret.token}`;
  if(input.config.tenantId)headers['X-Scope-OrgID']=String(input.config.tenantId);
  const base=String(input.config.endpoint??'').replace(/\/$/,'');
  try{
+  if(input.provider==='kubernetes'){
+   if(!input.secret.token)return result('not-configured','kubernetes.resources.read',0,'credential-required');
+   const snapshot=await new KubernetesReader({endpoint:base,namespace:String(input.config.namespace),certificateAuthority:input.config.certificateAuthority===undefined?undefined:String(input.config.certificateAuthority)},input.secret.token,transport).collect();
+   if(snapshot.truncated)return result('unavailable','kubernetes.resources.read',snapshot.records.length,'coverage-truncated');
+   return result(snapshot.records.length?'verified-read':'empty','kubernetes.resources.read',snapshot.records.length);
+  }
   if(input.provider==='slack')return result('unsupported','webhook.delivery',0,'approved-publication-required');
   if(input.provider==='github'){
    if(!input.secret.token)return result('not-configured','identity.read',0,'credential-required');

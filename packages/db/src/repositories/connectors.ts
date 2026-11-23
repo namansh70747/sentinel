@@ -42,7 +42,8 @@ export class ConnectorRepository {
    // A manager may edit configuration without being able to read an existing
    // secret. Moving that secret to another origin must require explicit input.
    const originChanged=existing.config.endpoint!==undefined&&value.config.endpoint!==undefined&&new URL(String(existing.config.endpoint)).origin!==new URL(String(value.config.endpoint)).origin;
-   const credentials=secret===undefined?(originChanged?{}:undefined):parseSecret(value.provider,secret);
+   const trustChanged=value.provider==='kubernetes'&&existing.config.certificateAuthority!==value.config.certificateAuthority;
+   const credentials=secret===undefined?(originChanged||trustChanged?{}:undefined):parseSecret(value.provider,secret);
    const sealed=credentials===undefined?existing.secret_envelope:Object.keys(credentials).length?this.vault.seal(workspaceId,id,credentials):null;
    const row=(await client.query('UPDATE connector_instances SET name=$1,mode=$2,config=$3,secret_envelope=$4,config_version=config_version+1,updated_at=now() WHERE workspace_id=$5 AND id=$6 RETURNING *',[value.name,value.mode,value.config,sealed,workspaceId,id])).rows[0] as Row;
    await this.snapshot(client,row);await this.db.appendAuditInTransaction(client,workspaceId,actor,'connector.updated',{connectorId:id,configVersion:row.config_version});return present(row);
@@ -51,9 +52,10 @@ export class ConnectorRepository {
  async bind(workspaceId:string,actor:string,serviceId:string,provider:Provider,connectorId:string,expectedVersion:number,mapping:unknown){
   const parsed=parseBinding(provider,mapping);
   return this.db.inWorkspace(workspaceId,async client=>{
-   const connector=(await client.query('SELECT config_version FROM connector_instances WHERE workspace_id=$1 AND id=$2 AND provider=$3 FOR SHARE',[workspaceId,connectorId,provider])).rows[0];
+   const connector=(await client.query('SELECT config_version,config FROM connector_instances WHERE workspace_id=$1 AND id=$2 AND provider=$3 FOR SHARE',[workspaceId,connectorId,provider])).rows[0];
    if(!connector)throw new ConnectorStateError('not-found','Connector not found');
    if(connector.config_version!==expectedVersion)throw new ConnectorStateError('version-conflict','Connector version changed');
+   if(provider==='kubernetes'&&connector.config.namespace!==parsed.namespace)throw new ConnectorStateError('version-conflict','Service namespace must match the connection namespace');
    if(!(await client.query('SELECT id FROM services WHERE workspace_id=$1 AND id=$2',[workspaceId,serviceId])).rowCount)throw new ConnectorStateError('not-found','Service not found');
    await client.query('INSERT INTO service_connector_bindings(workspace_id,service_id,provider,connector_id,mapping) VALUES($1,$2,$3,$4,$5) ON CONFLICT(workspace_id,service_id,provider) DO UPDATE SET connector_id=EXCLUDED.connector_id,mapping=EXCLUDED.mapping,updated_at=now()',[workspaceId,serviceId,provider,connectorId,parsed]);
    await this.db.appendAuditInTransaction(client,workspaceId,actor,'connector.bound',{connectorId,serviceId,provider,configVersion:expectedVersion});return {serviceId,connectorId,provider,mapping:parsed};
