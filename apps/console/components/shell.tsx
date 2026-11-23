@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "sonner";
 import { LiveProvider, useLive } from "../lib/live";
 import { Palette } from "./palette";
-import { Activity, ArrowUpRight, Bell, FileCheck2, Layers, LayoutDashboard, Plug, Shield, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Activity, ArrowUpRight, Bell, BookOpen, FileCheck2, Layers, LayoutDashboard, Plug, Shield, ShieldCheck, ChevronRight } from 'lucide-react';
 import './showcase.css';
 import './product.css';
 
@@ -39,7 +39,7 @@ function ProductFrame({children}:{children:ReactNode}) {
  const path=usePathname();
  const [signingOut,setSigningOut]=useState(false),[logoutError,setLogoutError]=useState('');
  async function signOut(){setSigningOut(true);setLogoutError('');try{const response=await fetch('/api/auth/logout',{method:'POST'});if(!response.ok)throw new Error();window.location.assign('/login');}catch{setLogoutError('Unable to sign out. Please retry.');setSigningOut(false);}}
- const items=[{href:'/dashboard',label:'Overview',icon:LayoutDashboard},{href:'/incidents',label:'Incidents',icon:Activity},{href:'/services',label:'Services',icon:Layers},{href:'/connectors',label:'Connectors',icon:Plug},{href:'/notifications',label:'Notifications',icon:Bell},{href:'/audit',label:'Audit log',icon:FileCheck2}];
+ const items=[{href:'/dashboard',label:'Overview',icon:LayoutDashboard},{href:'/incidents',label:'Incidents',icon:Activity},{href:'/services',label:'Services',icon:Layers},{href:'/connectors',label:'Connectors',icon:Plug},{href:'/notifications',label:'Notifications',icon:Bell},{href:'/runbooks',label:'Runbooks',icon:BookOpen},{href:'/audit',label:'Audit log',icon:FileCheck2}];
  const active=items.find(item=>path.startsWith(item.href));
  return <div className="sc-app sc-product">
   <aside className="sc-sidebar">

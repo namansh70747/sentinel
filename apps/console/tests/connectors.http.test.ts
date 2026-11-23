@@ -72,4 +72,18 @@ describe.skipIf(!base||!process.env.TEST_DATABASE_URL)('connector HTTP authoriza
   expect((await fetch(endpoint,{headers:headers(1)})).status).toBe(404);
   expect((await fetch(root+`/services/${serviceId}/changes`,{headers:headers(2)})).status).toBe(200);
  },30000);
+ it('limits runbook imports to administrators and keeps search/history workspace scoped',async()=>{
+  const endpoint=`${base}/api/workspaces/${workspaceId}/runbooks`;
+  const draft={slug:'checkout-recovery',title:'Checkout recovery',sourcePath:'checkout.md',markdown:'# Recovery\nInspect saturation and verify recovery.',serviceIds:[serviceId],expectedVersion:0};
+  expect((await fetch(endpoint)).status).toBe(401);
+  expect((await fetch(endpoint,{headers:headers(1)})).status).toBe(404);
+  expect((await fetch(endpoint,{method:'POST',headers:headers(2),body:JSON.stringify(draft)})).status).toBe(403);
+  expect((await fetch(endpoint,{method:'POST',headers:{...headers(),origin:'https://wrong.example'},body:JSON.stringify(draft)})).status).toBe(403);
+  const created=await fetch(endpoint,{method:'POST',headers:headers(),body:JSON.stringify(draft)});expect(created.status).toBe(201);const runbook=await created.json();
+  const results=await(await fetch(endpoint+'?q=saturation&serviceId='+serviceId,{headers:headers(2)})).json();expect(results.items[0].id).toBe(runbook.id);
+  const read=endpoint+'/'+runbook.id;expect((await fetch(read,{headers:headers(2)})).status).toBe(200);expect((await fetch(read,{headers:headers(1)})).status).toBe(404);
+  const updated=await fetch(endpoint,{method:'POST',headers:headers(),body:JSON.stringify({...draft,markdown:'# Recovered',expectedVersion:1})});expect(updated.status).toBe(201);
+  expect((await(await fetch(read+'?version=1',{headers:headers(2)})).json()).markdown).toBe(draft.markdown);
+  expect((await fetch(endpoint,{method:'POST',headers:headers(),body:JSON.stringify({...draft,markdown:'x'.repeat(524289)})})).status).toBe(400);
+ },30000);
 });

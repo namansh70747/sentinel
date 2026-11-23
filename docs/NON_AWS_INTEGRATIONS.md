@@ -147,6 +147,21 @@ AWS remains simulated. Teams, Jira, Linear, PagerDuty and other commercial catal
 items remain planned. Missing hosted credentials never count as successful
 integration and do not block testing local providers.
 
+## Runbooks implementation slice
+
+Approved scope: import local Markdown as data, preserve versions, link services
+and search current versions using PostgreSQL full-text search. No file supplied
+by a browser is opened on the server filesystem and no runbook commands execute.
+
+- [x] `0025_runbooks.sql`: workspace-owned documents, immutable versions, composite
+  service links, generated search vectors, GIN index and tenant RLS.
+- [x] `repositories/runbooks.ts`: bounded validation, optimistic/idempotent imports,
+  service isolation, search with explicit result truncation and historical reads.
+- [x] Workspace runbook APIs: membership reads, admin-only imports, origin/size checks.
+- [x] Authenticated runbooks page: local Markdown upload, service selection, search,
+  version browsing, escaped content, loading/empty/error/mobile states.
+- [x] Database/HTTP/browser acceptance and operator documentation for this slice.
+
 ## Communication checkpoint verification
 
 - Full suite with local least-privilege database: 119 passed, 12 skipped.
@@ -175,3 +190,28 @@ integration and do not block testing local providers.
 - Earlier peer reviews identified defects fixed with regression coverage. The final
   follow-up reviewer was unavailable due to its usage limit; the latest history and
   connection-backoff changes have automated verification, not a completed final peer review.
+
+## Runbooks checkpoint verification
+
+- PostgreSQL current-version search follows the [official stored-vector/GIN
+  guidance](https://www.postgresql.org/docs/18/textsearch-tables.html), with an explicit
+  `simple` configuration so search is independent of connection defaults.
+- Database suite with runtime credentials: 127 passed, 14 skipped. Integration
+  command: 24 passed, eleven suites. Root and console TypeScript checks passed.
+- Actual browser import of `docs/runbooks/local-telemetry.md` created version 1
+  linked to checkout. The authenticated content view showed source, hash and links.
+- Peer review found an identical-request retry conflict; fixed and tested using
+  the original expected version. Different stale content still conflicts.
+- Forward migration 0026 adds the ordered historical GitHub lookup index. EXPLAIN
+  confirms an ordered index path without a Sort under explicit index preferences;
+  the tiny fixture's default planner prefers a smaller selective scan and sort.
+  This is not a long-history load benchmark; that scale gate remains outstanding.
+
+Runbook import: open `/runbooks`, select a workspace, choose Import Markdown and
+link the appropriate services. Open an existing document before importing a new
+version. Identical content, title, source path and links reuse the current version.
+Historical service links are preserved with their version. Search returns current
+versions only; more than 50 results is explicitly marked truncated. Raw Markdown
+is escaped as text and is never executed or interpreted as trusted agent instructions.
+
+Mobile browser acceptance at 390 px passed without page overflow. A browser-discovered HTML pattern incompatibility was fixed before the checkpoint. Long-history scale acceptance and broader platform restart/recovery gates remain separate.
