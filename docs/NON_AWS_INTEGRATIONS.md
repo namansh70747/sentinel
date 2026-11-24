@@ -457,3 +457,13 @@ displayed live ECS evidence. The database and Temporal test suite passed
 The console container persisted eight live Kubernetes records after joining
 the owned cluster network. An approved Slack test on #new-channel recorded
 sent, and a local ntfy test recorded confirmed with a provider message ID.
+
+Chrome acceptance also passed a live checkout Kubernetes observation and a
+manual GitHub sync after the worker restart. A fresh approved Slack test
+recorded sent, and a fresh local ntfy ledger test recorded confirmed.
+
+The worker's exact target settings are an authorization boundary even for
+frozen runs. Changing that allowlist can make outstanding runs for the old
+target unavailable for collection. Drain outstanding runs before changing
+the target if they must finish. To replace source credentials, run the import
+with `--rotate`, then recreate the worker so the Docker file mount is refreshed.

@@ -1,5 +1,6 @@
 import { loadEnvFile } from 'node:process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, open, rename, unlink } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { SentinelDatabase } from '@sentinel/db';
 import { ConnectorRepository } from '@sentinel/db/connectors';
@@ -33,7 +34,28 @@ try {
  if(!existing)await credentials.bind(workspace,actor,service,'ecs',connector.id,connector.configVersion,{serviceArn,readRoleArn});
  const keys=[['aws_access_key_id',process.env.AWS_ACCESS_KEY_ID],['aws_secret_access_key',process.env.AWS_SECRET_ACCESS_KEY],['aws_session_token',process.env.AWS_SESSION_TOKEN]] as const;
  if(!keys[0][1]||!keys[1][1]||keys.some(([,value])=>value&&/[\r\n]/.test(value)))throw new Error('Valid AWS source credentials are required');
- await writeFile('.local/aws-read-credentials','[sentinel]\n'+keys.filter(([,value])=>value).map(([key,value])=>key+'='+value).join('\n')+'\n',{mode:0o600,flag:'wx'}).catch(error=>{if(error.code!=='EEXIST')throw error;});
+ const path='.local/aws-read-credentials';
+ const profile='[sentinel]\n'+keys.filter(([,value])=>value).map(([key,value])=>key+'='+value).join('\n')+'\n';
+ let previous:string|undefined;
+ const existingFile=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW).catch(error=>{
+  if(error.code==='ENOENT')return null;
+  throw error;
+ });
+ if(existingFile){
+  try{
+   const info=await existingFile.stat();
+   if(!info.isFile()||(info.mode&0o777)!==0o600||info.size>16384||(process.getuid&&info.uid!==process.getuid()))throw new Error('AWS credentials must be a private regular file owned by the operator');
+   previous=await existingFile.readFile('utf8');
+  }finally{await existingFile.close();}
+ }
+ if(previous===undefined)await writeFile(path,profile,{mode:0o600,flag:'wx'});
+ else if(previous!==profile){
+  if(!process.argv.includes('--rotate'))throw new Error('Private AWS credentials differ from .env. Use --rotate to replace them explicitly.');
+  const temp=path+'.'+randomUUID();
+  await writeFile(temp,profile,{mode:0o600,flag:'wx'});
+  try{await rename(temp,path);}finally{await unlink(temp).catch(error=>{if(error.code!=='ENOENT')throw error;});}
+ }
+
  await writeFile('.local/aws-live.env',`SENTINEL_ECS_SERVICE_ARN=${serviceArn}\nSENTINEL_READ_ROLE_ARN=${readRoleArn}\n`,{mode:0o600});
  console.log(JSON.stringify({workspaceId:workspace,serviceId:service,connectorId:connector.id}));
 }finally{await db.close();}
