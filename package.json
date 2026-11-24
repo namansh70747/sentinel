@@ -19,6 +19,7 @@
     "dev:observe": "docker compose --env-file .local/compose.env -p sentinel -f compose.observe.yml up -d --build workload prometheus blackbox loki tempo alloy grafana ntfy && npm run dev:wait",
     "dev:doctor": "node scripts/dev/doctor.mjs",
     "dev:prepare-auth": "SENTINEL_PUBLIC_URL=http://localhost:3010 node scripts/dev/prepare-keycloak.mjs",
+    "dev:ensure-owner": "node scripts/dev/ensure-owner.mjs",
     "dev:wait": "node scripts/dev/wait.mjs",
     "scenario:healthy": "node scripts/scenarios/traffic.mjs healthy",
     "scenario:degradation": "node scripts/scenarios/traffic.mjs degradation",

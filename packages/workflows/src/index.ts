@@ -1,6 +1,6 @@
 import { isCancellation, patched, proxyActivities } from '@temporalio/workflow';
 import type { SourceResult, SourceName } from '@sentinel/contracts';
-export interface InvestigationInput { workspaceId: string; incidentId: string; serviceId: string; runId?:string }
+export interface InvestigationInput { workspaceId: string; incidentId: string; serviceId: string; runId?:string;extraSources?:'kubernetes'[] }
 export interface InvestigationResult { status: 'advised' | 'escalated'; summary: string }
 export interface ReadActivities {
  collectPrometheus(input: InvestigationInput): Promise<SourceResult>;
@@ -11,6 +11,7 @@ export interface ReadActivities {
  collectCloudwatch(input: InvestigationInput): Promise<SourceResult>;
  collectCost(input: InvestigationInput): Promise<SourceResult>;
  collectDr(input: InvestigationInput): Promise<SourceResult>;
+ collectKubernetes(input: InvestigationInput): Promise<SourceResult>;
  recordSourceFailure(input: InvestigationInput, source: SourceName): Promise<void>;
  recordInvestigation(input: InvestigationInput, result: InvestigationResult): Promise<void>;
  notifyNtfy(input: InvestigationInput, result: InvestigationResult): Promise<void>;
@@ -59,6 +60,8 @@ export async function investigateIncident(input: InvestigationInput): Promise<In
   await activities.collectCost(input);
   await activities.collectDr(input);
  }
+ // Serialized opt-in keeps prior histories on their original eight-source path.
+ if(input.extraSources?.includes('kubernetes'))await collectOptional(input,'kubernetes',activities.collectKubernetes);
  const result: InvestigationResult = prometheus.outcome === 'ok' || prometheus.outcome === 'uncovered'
   ? { status: 'advised', summary: prometheus.summary }
   : { status: 'escalated', summary: prometheus.summary };

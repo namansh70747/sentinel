@@ -4,6 +4,7 @@ import { SentinelDatabase } from './index';
 import { ConnectorRepository } from './repositories/connectors';
 import { OperationalFindingsRepository } from './repositories/operational-findings';
 import { SecretVault } from '@sentinel/connectors/secrets';
+import { InvestigationRepository } from './repositories/investigations';
 const db=process.env.TEST_DATABASE_URL?new SentinelDatabase(process.env.TEST_DATABASE_URL):null;
 afterAll(()=>db?.close());
 it.skipIf(!db)('isolates immutable operational snapshots and rejects cross-namespace service mappings',async()=>{
@@ -18,4 +19,15 @@ it.skipIf(!db)('isolates immutable operational snapshots and rejects cross-names
  await expect(db!.inWorkspace(workspace,c=>c.query('UPDATE operational_findings SET detail=$1 WHERE id=$2',[{},id]))).rejects.toThrow();
  const resolved=await connections.resolve(workspace,service,'kubernetes');if(!resolved)throw Error('No binding');
  await expect(repository.collect(workspace,'test',service,{...resolved,mapping:{namespace:'kube-system',labelSelector:'app=checkout'}})).rejects.toThrow('matching namespace');
+ const incident=randomUUID();await db!.inWorkspace(workspace,c=>c.query("INSERT INTO incidents(workspace_id,id,service_id,title,state,severity) VALUES($1,$2,$3,'Kubernetes refresh','investigating','sev4')",[workspace,incident,service]));
+ const runs=new InvestigationRepository(db!),run=await runs.create(workspace,incident,'test');
+ expect((await runs.get(workspace,run.id))?.attempts).toHaveLength(9);
+ expect((await runs.get(workspace,run.id))?.attempts.find(row=>row.source==='kubernetes')?.config_version).toBe(1);
+ await connections.update(workspace,'test',connection.id,1,{provider:'kubernetes',name:'Disabled reader',mode:'off',config:{endpoint:'https://k3d-sentinel-local-server-0:6443',namespace:'sentinel-demo'}});
+ const frozen=await connections.resolve(workspace,service,'kubernetes',run.id);expect(frozen?.configVersion).toBe(1);expect(frozen?.mapping.labelSelector).toBe('app=checkout');expect(frozen?.secret.token).toBe('private-fixture-token');
+ const input={workspaceId:workspace,incidentId:incident,serviceId:service,runId:run.id};
+ expect(await runs.persist(input,'kubernetes','ok','live',{fixture:'first observation'})).toBe(true);
+ expect(await runs.persist(input,'kubernetes','unavailable','live',{fixture:'retry must not replace'})).toBe(false);
+ expect((await runs.get(workspace,run.id))?.evidence.find(row=>row.source==='kubernetes')?.detail).toEqual({fixture:'first observation'});
+ const disabledRun=await runs.create(workspace,incident,'test');expect((await runs.get(workspace,disabledRun.id))?.attempts).toHaveLength(8);
 });

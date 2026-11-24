@@ -40,7 +40,7 @@ export interface ServiceCatalog {
   resourceArn: string;
 }
 
-export type SourceName = 'prometheus' | 'ecs' | 'loki' | 'tempo' | 'github' | 'cloudwatch' | 'cost' | 'dr';
+export type SourceName = 'prometheus' | 'ecs' | 'loki' | 'tempo' | 'github' | 'cloudwatch' | 'cost' | 'dr' | 'kubernetes';
 export type SourceOutcome = 'ok' | 'unavailable' | 'stale' | 'not-configured' | 'uncovered' | 'empty' | 'denied';
 export type Provenance = 'live' | 'simulated';
 export interface SourceResult { source: SourceName; outcome: SourceOutcome; provenance: Provenance | null; summary: string }

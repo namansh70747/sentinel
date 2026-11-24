@@ -5,8 +5,9 @@ import { InvestigationRepository } from '@sentinel/db/investigations';
 export async function dispatchRun(db:SentinelDatabase,client:Client,workspaceId:string){return db.inWorkspace(workspaceId,async connection=>{
  const run=(await connection.query("SELECT * FROM investigation_runs WHERE workspace_id=$1 AND status='queued' ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED",[workspaceId])).rows[0];
  if(!run)return false;
+ const extraSources=(await connection.query("SELECT source FROM investigation_source_attempts WHERE workspace_id=$1 AND run_id=$2 AND source='kubernetes'",[workspaceId,run.id])).rows.map(row=>row.source);
  try{
-  await client.workflow.start('investigateIncident',{taskQueue:'sentinel-read',workflowExecutionTimeout:'10 minutes',workflowIdReusePolicy:WorkflowIdReusePolicy.REJECT_DUPLICATE,workflowId:`investigation-run-${workspaceId}-${run.id}`,args:[{workspaceId,incidentId:run.incident_id,serviceId:run.service_id,runId:run.id}]});
+  await client.workflow.start('investigateIncident',{taskQueue:'sentinel-read',workflowExecutionTimeout:'10 minutes',workflowIdReusePolicy:WorkflowIdReusePolicy.REJECT_DUPLICATE,workflowId:`investigation-run-${workspaceId}-${run.id}`,args:[{workspaceId,incidentId:run.incident_id,serviceId:run.service_id,runId:run.id,...(extraSources.length?{extraSources}:{})}]});
  }catch(error){if(!(error instanceof WorkflowExecutionAlreadyStartedError))throw error;}
  await connection.query("UPDATE investigation_runs SET status='running' WHERE workspace_id=$1 AND id=$2 AND status='queued'",[workspaceId,run.id]);return true;
 });}

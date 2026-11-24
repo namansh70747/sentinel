@@ -14,6 +14,7 @@ export async function PUT(request:Request, context:{params:Promise<{workspaceId:
  const found=await db.inWorkspace(workspaceId,async client=>{
   if(!(await client.query('SELECT id FROM services WHERE workspace_id=$1 AND id=$2',[workspaceId,serviceId])).rowCount)return false;
   await client.query('INSERT INTO service_slos(workspace_id,service_id,availability_target,latency_target_ms,good_query,total_query,latency_query) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(workspace_id,service_id) DO UPDATE SET availability_target=EXCLUDED.availability_target,latency_target_ms=EXCLUDED.latency_target_ms,good_query=EXCLUDED.good_query,total_query=EXCLUDED.total_query,latency_query=EXCLUDED.latency_query',[workspaceId,serviceId,body.availabilityTarget,body.latencyTargetMs,body.goodQuery,body.totalQuery,body.latencyQuery]);
+  await client.query('INSERT INTO slo_versions(workspace_id,service_id,version,availability_target,latency_target_ms,good_query,total_query,latency_query) VALUES($1,$2,(SELECT COALESCE(MAX(version),0)+1 FROM slo_versions WHERE workspace_id=$1 AND service_id=$2),$3,$4,$5,$6,$7)',[workspaceId,serviceId,body.availabilityTarget,body.latencyTargetMs,body.goodQuery,body.totalQuery,body.latencyQuery]);
   await db.appendAuditInTransaction(client,workspaceId,identity.id,'slo.configured',{serviceId,availabilityTarget:body.availabilityTarget,latencyTargetMs:body.latencyTargetMs});return true;
  });
  return found?Response.json({ok:true}):Response.json({error:'Service not found'},{status:404});

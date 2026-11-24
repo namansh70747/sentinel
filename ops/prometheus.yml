@@ -4,6 +4,9 @@ scrape_configs:
   - job_name: workload
     static_configs:
       - targets: ['workload:9464']
+  - job_name: workload-payments
+    static_configs:
+      - targets: ['workload-payments:9464']
   - job_name: blackbox
     metrics_path: /probe
     params:

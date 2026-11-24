@@ -22,8 +22,9 @@ export class InvestigationRepository {
   if(pending.rows[0].total>=10)throw new ConnectorStateError('capacity','Workspace investigation queue is full');
   const id=randomUUID();
   const run=(await client.query('INSERT INTO investigation_runs(workspace_id,id,incident_id,service_id,requested_by) VALUES($1,$2,$3,$4,$5) RETURNING *',[workspaceId,id,incidentId,incident.service_id,actor])).rows[0];
-  for(const source of sources){
+  for(const source of [...sources,'kubernetes'] as SourceName[]){
    const binding=(await client.query("SELECT b.mapping,c.id,c.config_version FROM service_connector_bindings b JOIN connector_instances c ON c.workspace_id=b.workspace_id AND c.id=b.connector_id AND c.provider=b.provider WHERE b.workspace_id=$1 AND b.service_id=$2 AND b.provider=$3 AND c.mode='live'",[workspaceId,incident.service_id,source])).rows[0];
+   if(source==='kubernetes'&&!binding)continue;
    let mapping=binding?.mapping??{};
    if(source==='prometheus'){
     const targets=(await client.query('SELECT availability_target,latency_target_ms FROM service_slos WHERE workspace_id=$1 AND service_id=$2',[workspaceId,incident.service_id])).rows[0];

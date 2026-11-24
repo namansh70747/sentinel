@@ -1,5 +1,7 @@
 # Sentinel master implementation plan
 
+The active execution plan is [PLAN-COMPLETION.md](PLAN-COMPLETION.md). This file remains the 2026-11-16 master plan. Measured results stay in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
+
 **Goal:** Turn the current Sentinel repository into one coherent SRE product with a redesigned website and operator console, real local observability, durable investigations, useful free integrations, explicit AWS simulation, and a reviewed path to future live AWS operation.
 
 **Baseline:** GitHub and the primary local checkout are both on `main` at `3ebe3b6`. The ZIP showcase, offline HTML, approval foundation, source-specific evidence work and Cursor’s latest integration changes are already pushed and merged. The current `main` CI run passed.

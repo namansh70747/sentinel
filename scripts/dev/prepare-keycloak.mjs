@@ -14,9 +14,15 @@ const realm = {realm:'sentinel',enabled:true,clients:[{clientId:'sentinel',enabl
 // Import is additive for a new local realm; never reset an existing user's
 // identity or password while preparing files for another startup.
 realm.users=previous?.users??realm.users;
-let owner=realm.users.find(user=>user.username==='namsh70747@gmail.com');
-if(!owner){owner={id:randomUUID(),username:'namsh70747@gmail.com',enabled:true,email:'namsh70747@gmail.com',emailVerified:true,firstName:'Local',lastName:'Owner',credentials:[{type:'password',value:randomBytes(24).toString('base64url'),temporary:false}]};realm.users.push(owner);}
-owner.id??=randomUUID();
+function ensureUser(username,email,firstName,lastName){
+ let user=realm.users.find(item=>item.username===username);
+ if(!user){user={id:randomUUID(),username,enabled:true,email,emailVerified:true,firstName,lastName,credentials:[{type:'password',value:randomBytes(24).toString('base64url'),temporary:false}]};realm.users.push(user);}
+ user.id??=randomUUID();
+ return user;
+}
+ensureUser('namsh70747@gmail.com','namsh70747@gmail.com','Local','Owner');
+const ownerEmail=process.env.SENTINEL_OWNER_EMAIL||'nsharma_be24@thapar.edu';
+const owner=ensureUser(ownerEmail,ownerEmail,'Naman','Sharma');
 let workspaceId;
 try{workspaceId=(JSON.parse(await readFile(new URL('../owner.json',directory),'utf8'))).workspaceId;}catch(error){if(error.code!=='ENOENT')throw error;}
 workspaceId??=randomUUID();

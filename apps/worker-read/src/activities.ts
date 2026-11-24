@@ -9,6 +9,7 @@ import { collectBoundLogs,collectBoundTraces,collectBoundMetrics } from '@sentin
 import { ConnectorHttpClient,ConnectorHttpError } from '@sentinel/connectors/http';
 import { InvestigationRepository,type RunIdentity } from '@sentinel/db/investigations';
 import { GitHubSyncRepository } from '@sentinel/db/github-sync';
+import { KubernetesReader } from '@sentinel/connectors/kubernetes';
 
 export function readEcsMode(value = process.env.SENTINEL_ECS_MODE): 'off' | 'simulated' | 'live' {
  if (value !== 'off' && value !== 'simulated' && value !== 'live') throw new Error('SENTINEL_ECS_MODE must be off, simulated, or live');
@@ -77,6 +78,18 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
   }catch(error){const code=error instanceof ConnectorHttpError||error instanceof SloReadError?error.code:'collection-failed';const outcome=code==='denied'?'denied':code==='stale'?'stale':code==='empty'?'empty':'unavailable';await write(input,source,outcome,'live',{errorCode:code,reason:'Workspace provider read failed.'});return result(source,outcome,'live',`Workspace provider read failed (${code}).`);}
  };
  return {
+  async collectKubernetes(input:InvestigationInput):Promise<SourceResult>{
+   const prior=await cached(input,'kubernetes');if(prior)return prior;
+   if(!input.runId)return result('kubernetes','not-configured',null,'Kubernetes is collected only in explicitly opted-in fresh runs.');
+   try{
+    const connection=await connections?.resolve(input.workspaceId,input.serviceId,'kubernetes',input.runId);
+    if(!connection||!connection.secret.token||connection.mapping.namespace!==connection.config.namespace){await write(input,'kubernetes','not-configured',null,{reason:'No enabled frozen Kubernetes reader mapping is available.'});return result('kubernetes','not-configured',null,'Kubernetes reader is not configured for this run.');}
+    const snapshot=await new KubernetesReader({endpoint:String(connection.config.endpoint),namespace:String(connection.config.namespace),certificateAuthority:connection.config.certificateAuthority===undefined?undefined:String(connection.config.certificateAuthority)},connection.secret.token).collect(String(connection.mapping.labelSelector));
+    const outcome=snapshot.truncated?'uncovered':snapshot.records.length?'ok':'empty';
+    await write(input,'kubernetes',outcome,'live',redact({...snapshot,connectorId:connection.id,configVersion:connection.configVersion,readSemantics:'current-state-at-collection',requestedAt:connection.observedAt?.toISOString()},Object.values(connection.secret)),{observedAt:snapshot.observedAt});
+    return result('kubernetes',outcome,'live','Namespace-scoped Kubernetes context recorded with its actual collection timestamp.');
+   }catch(error){const code=error instanceof ConnectorHttpError?error.code:'collection-failed',outcome=code==='denied'?'denied':'unavailable';await write(input,'kubernetes',outcome,'live',{errorCode:code,reason:'The live namespace read failed. No simulated fallback was used.'});return result('kubernetes',outcome,'live','Kubernetes context could not be collected.');}
+  },
   async recordSourceFailure(input: InvestigationInput, source: SourceName) {
    await write(input, source, 'unavailable', null, { reason: 'Evidence collection failed after retries.' });
   },

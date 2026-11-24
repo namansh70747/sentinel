@@ -27,8 +27,8 @@ Product: http://localhost:3010; showcase: http://localhost:3011 (separate existi
 showcase command); Grafana: http://localhost:3012; identity: http://localhost:8088.
 
 `dev:prepare` generates private files under ignored `.local/`. Owner login is
-`namsh70747@gmail.com`; password is `.local/keycloak/owner-password`. The previous
-operator account is preserved. `bootstrap-owner.ts` preserves existing users,
+`nsharma_be24@thapar.edu`; password is `.local/keycloak/owner-password` after
+`npm run dev:ensure-owner`. The previous `namsh70747@gmail.com` account is preserved. `bootstrap-owner.ts` preserves existing users,
 workspaces and membership roles. Keycloak realm import initializes new realms;
 it does not reconcile an already imported realm. Do not delete Keycloak data to
 add an account to an existing realm: use its admin interface instead.
@@ -386,3 +386,23 @@ Root/console TypeScript and focused peer review passed with no remaining
 Critical/Important findings.
 
 Real browser acceptance passed the queued Kubernetes capability (`verified-read`) and an authenticated on-demand service read. The mobile grid overflow found during browser testing was fixed; after rebuilding and reloading, the 390 px page stayed within its viewport while the findings table scrolled horizontally inside its card.
+
+## Kubernetes investigation evidence slice
+
+New runs include a ninth Kubernetes source only when their service has an enabled
+Kubernetes mapping at creation. The persisted attempt freezes configuration, secret
+version and selector. Dispatch serializes that opt-in into the workflow input;
+existing inputs/histories remain on the original eight-source path. A real prior
+eight-source local execution replayed successfully against the updated workflow.
+
+Kubernetes cannot query a historical point-in-time API snapshot. Its envelope
+therefore declares `current-state-at-collection`, records actual observed/collected
+time and separately retains the run request cutoff. It never backdates a current
+pod state. Activity retries reuse the first persisted envelope.
+
+Disabling a connector stops new tests, synchronization, direct reads and new-run
+inclusion. Already requested read-only investigation runs retain their immutable
+configuration snapshot, including the captured live mode. To invalidate a token
+immediately, revoke it at the provider; configuration disable is not credential
+revocation. Notification publishing still requires its current approved destination.
+This behavior is explicit in the connection form and covered by regression tests.

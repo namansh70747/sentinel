@@ -68,7 +68,7 @@ export class ConnectorRepository {
     FROM investigation_source_attempts a JOIN investigation_runs r ON r.workspace_id=a.workspace_id AND r.id=a.run_id
     JOIN connector_instances c ON c.workspace_id=a.workspace_id AND c.id=a.connector_id AND c.provider=a.source
     JOIN connector_versions v ON v.workspace_id=a.workspace_id AND v.connector_id=a.connector_id AND v.version=a.config_version
-    WHERE a.workspace_id=$1 AND r.service_id=$2 AND a.source=$3 AND a.run_id=$4 AND c.mode='live' AND v.mode='live'`,[workspaceId,serviceId,provider,runId])).rows[0];
+    WHERE a.workspace_id=$1 AND r.service_id=$2 AND a.source=$3 AND a.run_id=$4 AND v.mode='live'`,[workspaceId,serviceId,provider,runId])).rows[0];
    return row?{...present(row),mapping:row.mapping as Record<string,string|number>,observedAt:row.observed_at as Date,secret:row.secret_envelope?this.vault.open(workspaceId,row.id,row.secret_envelope):{}}:null;
   }
   const row=(await client.query('SELECT c.*,b.mapping FROM service_connector_bindings b JOIN connector_instances c ON c.workspace_id=b.workspace_id AND c.id=b.connector_id AND c.provider=b.provider WHERE b.workspace_id=$1 AND b.service_id=$2 AND b.provider=$3 AND c.mode=$4',[workspaceId,serviceId,provider,'live'])).rows[0];

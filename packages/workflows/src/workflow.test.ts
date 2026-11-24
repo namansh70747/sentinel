@@ -10,6 +10,18 @@ describe.skipIf(process.env.TEST_TEMPORAL !== 'true')('durable read-only investi
  let env: TestWorkflowEnvironment;
  beforeAll(async () => { env = await TestWorkflowEnvironment.createTimeSkipping(); }, 120000);
  afterAll(async () => { if (env) await env.teardown(); });
+ it('adds Kubernetes only for explicitly opted-in fresh runs and replays both input histories',async()=>{
+  let calls=0;const workflowsPath=fileURLToPath(new URL('./index.ts',import.meta.url)),taskQueue='sentinel-kubernetes-opt-in';
+  const worker=await Worker.create({connection:env.nativeConnection,taskQueue,workflowsPath,activities:{
+   collectPrometheus:async()=>({source:'prometheus',outcome:'ok',provenance:'live',summary:'metrics available'}),collectEcs:skip,collectLoki:skip,collectTempo:skip,collectGithub:skip,collectCloudwatch:skip,collectCost:skip,collectDr:skip,
+   collectKubernetes:async()=>{calls++;return {source:'kubernetes',outcome:'ok',provenance:'live',summary:'Namespace context recorded'};},recordInvestigation:async()=>{},recordSourceFailure:async()=>{},notifyNtfy:async()=>{},
+  }});
+  await worker.runUntil((async()=>{for(const enabled of [false,true]){
+   const workflowId='kubernetes-opt-in-'+String(enabled),input={workspaceId:'workspace',incidentId:'incident',serviceId:'service',...(enabled?{extraSources:['kubernetes' as const]}:{})};
+   await env.client.workflow.execute(investigateIncident,{taskQueue,workflowId,args:[input]});expect(calls).toBe(enabled?1:0);
+  }})());
+  for(const enabled of [false,true])await Worker.runReplayHistory({workflowsPath},await env.client.workflow.getHandle('kubernetes-opt-in-'+String(enabled)).fetchHistory());
+ },120000);
  it('stores the prometheus error text and still asks for the other sources', async () => {
   const recorded: unknown[] = [];
   const calls: string[] = [];

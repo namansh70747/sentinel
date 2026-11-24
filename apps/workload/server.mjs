@@ -5,6 +5,7 @@ const telemetry = startTracing(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT);
 const server = createWorkload({
  tracer: telemetry?.tracer,
  mode: process.env.SENTINEL_WORKLOAD_MODE === 'local' ? 'local' : 'production',
+ serviceName: process.env.OTEL_SERVICE_NAME || 'workload',
  log(entry) {
   const line = JSON.stringify(entry);
   try { appendFileSync(process.env.WORKLOAD_LOG_FILE ?? '/var/log/workload.log', `${line}\n`); } catch { /* stdout remains available */ }

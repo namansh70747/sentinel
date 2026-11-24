@@ -1,5 +1,6 @@
 import { createHash,randomUUID,timingSafeEqual } from 'node:crypto';
 import { normalizeGrafanaAlerts } from '@sentinel/connectors';
+import { appendWorkspaceEvent } from '@sentinel/db/collaboration';
 import { getDatabase } from '../../../../../lib/auth';
 import { isUuid } from '../../../../../lib/workspace-access';
 export async function POST(request:Request,context:{params:Promise<{endpointId:string}>}) {
@@ -22,13 +23,15 @@ export async function POST(request:Request,context:{params:Promise<{endpointId:s
    const inserted=await client.query('INSERT INTO webhook_deliveries(endpoint_id,dedupe_key) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING endpoint_id',[endpointId,signal.dedupeKey]);
    if(!inserted.rowCount)continue;
    // Resolution notifications are recorded, never treated as verified SLI recovery.
-   let incidentId:string|null=null;
-   if(signal.status==='firing'){
-    const id=randomUUID();
-    incidentId=id;
-    await client.query("INSERT INTO incidents(workspace_id,id,service_id,title,state,severity) VALUES($1,$2,$3,$4,'investigating','sev4')",[endpoint.workspace_id,id,endpoint.service_id,signal.title]);
-    await client.query('INSERT INTO investigation_jobs(workspace_id,incident_id,service_id) VALUES($1,$2,$3)',[endpoint.workspace_id,id,endpoint.service_id]);queued++;
+   const open=(await client.query("SELECT i.id FROM incidents i JOIN incident_signals s ON s.workspace_id=i.workspace_id AND s.incident_id=i.id WHERE i.workspace_id=$1 AND i.service_id=$2 AND s.fingerprint=$3 AND i.state NOT IN ('recovered','closed') ORDER BY i.created_at DESC LIMIT 1",[endpoint.workspace_id,endpoint.service_id,signal.fingerprint])).rows[0];
+   let incidentId:string|null=open?.id??null;
+   if(signal.status==='firing'&&!incidentId){
+    incidentId=randomUUID();
+    await client.query("INSERT INTO incidents(workspace_id,id,service_id,title,state,severity) VALUES($1,$2,$3,$4,'investigating','sev4')",[endpoint.workspace_id,incidentId,endpoint.service_id,signal.title]);
+    await client.query('INSERT INTO investigation_jobs(workspace_id,incident_id,service_id) VALUES($1,$2,$3)',[endpoint.workspace_id,incidentId,endpoint.service_id]);queued++;
    }
+   await client.query('INSERT INTO incident_signals(workspace_id,id,service_id,incident_id,fingerprint,status,dedupe_key) VALUES($1,$2,$3,$4,$5,$6,$7)',[endpoint.workspace_id,randomUUID(),endpoint.service_id,incidentId,signal.fingerprint,signal.status,signal.dedupeKey]);
+   await appendWorkspaceEvent(client,endpoint.workspace_id,'signal.received',incidentId,{status:signal.status,fingerprint:signal.fingerprint});
    await db.appendAuditInTransaction(client,endpoint.workspace_id,'grafana-webhook','signal.received',{endpointId,status:signal.status,dedupeKey:signal.dedupeKey,fingerprint:signal.fingerprint,startsAt:signal.startsAt,title:signal.title,incidentId});
   }return queued;
  });

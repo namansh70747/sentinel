@@ -6,6 +6,7 @@ import { SpanKind, SpanStatusCode, type Tracer } from '@opentelemetry/api';
 
 export interface WorkloadOptions {
  mode: 'local' | 'production';
+ serviceName?: string;
  log: (line: Record<string, unknown>) => void;
  tracer?: Tracer;
 }
@@ -37,7 +38,7 @@ export function createWorkload(options: WorkloadOptions) {
   metrics.duration.observe(seconds);
   span?.setAttribute('http.response.status_code', status);
   if (status >= 500) span?.setStatus({ code: SpanStatusCode.ERROR });
-  options.log({ time: new Date().toISOString(), service: 'workload', path: url.pathname, status, requestId, traceId, durationMs: seconds * 1000 });
+  options.log({ time: new Date().toISOString(), service: options.serviceName ?? 'workload', path: url.pathname, status, requestId, traceId, durationMs: seconds * 1000 });
   res.writeHead(status);
   res.end(status === 500 ? 'fail' : status === 404 ? 'not found' : 'ok');
   span?.end();
