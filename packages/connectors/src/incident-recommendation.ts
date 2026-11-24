@@ -184,8 +184,8 @@ export async function rankWithHostedProviders(
  const ids=[...approved.keys()];
  const prompt='Select the first check from these approved alternatives. Return only a JSON object with a source field. '+JSON.stringify([...approved].map(([source,outcome])=>({source,outcome})));
  const configs=[
-  {provider:'gemini',key:keys.gemini,model:'gemini-3.1-flash-lite',url:'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent'},
-  {provider:'nvidia',key:keys.nvidia,model:'meta/llama-3.1-8b-instruct',url:'https://integrate.api.nvidia.com/v1/chat/completions'},
+  {provider:'gemini',key:keys.gemini,model:'gemini-3.5-flash-lite',url:'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent'},
+  {provider:'nvidia',key:keys.nvidia,model:'nvidia/nemotron-3.5-bolt-e4b',url:'https://integrate.api.nvidia.com/v1/chat/completions'},
  ] as const;
  const started=performance.now();
  let attempts=0;
@@ -207,7 +207,7 @@ export async function rankWithHostedProviders(
     generationConfig:{temperature:0,maxOutputTokens:128,thinkingConfig:{thinkingLevel:'MINIMAL'},responseMimeType:'application/json',
      responseSchema:{type:'OBJECT',properties:{source:{type:'STRING',enum:ids}},required:['source']}},
    }:{
-    model:config.model,messages:[{role:'user',content:prompt}],stream:false,max_tokens:64,temperature:0,
+    model:config.model,messages:[{role:'user',content:prompt}],stream:false,max_tokens:128,temperature:0,
    };
    const response=await request(config.url,{method:'POST',headers,body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(timeout)});
    state.httpStatus=response.status;
