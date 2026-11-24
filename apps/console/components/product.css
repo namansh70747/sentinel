@@ -198,3 +198,34 @@
   .desk-shortcuts a:hover, .desk-primary:hover, .desk-login-button:hover { transform: translateY(-2px); box-shadow: 0 5px 14px #19392c20; }
   @keyframes desk-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 }
+
+.sc-product .traffic-replay {
+  margin-top: 16px;
+  padding: clamp(17px, 3vw, 32px);
+  border: 1px solid #26473d;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 75% 0%, #1e4538, transparent 65%), #0d221c;
+  color: #f1fff8;
+}
+.traffic-header, .traffic-controls { display: flex; align-items: center; gap: 8px; }
+.traffic-header { justify-content: space-between; }
+.traffic-label { display: inline-flex; align-items: center; gap: 6px; color: #a6d8be; font-size: 12px; }
+.sc-product .traffic-header h2 { margin: 4px 0 0; color: #f1fff8; font-size: clamp(16px, 2.2vw, 23px); }
+.traffic-measure { display: flex; align-items: baseline; gap: 8px; margin: 12px 0 4px; }
+.traffic-measure strong { color: #a2f8c4; font-size: clamp(27px, 5vw, 46px); font-variant-numeric: tabular-nums; line-height: 1; }
+.traffic-measure span { color: #b2ccbf; font-size: 12px; }
+.traffic-chart { display: block; width: 100%; height: clamp(95px, 16vw, 170px); overflow: visible; margin: 8px 0 15px; }
+.traffic-grid { stroke: #a7dbbd31; stroke-dasharray: 4 7; }
+.traffic-line { fill: none; stroke: #8bf5bb; stroke-width: 2.5; stroke-linejoin: round; }
+.traffic-cursor { stroke: #8bf5bb89; stroke-dasharray: 3 5; }
+.traffic-dot { fill: #e6fff0; stroke: #68da9a; stroke-width: 2; }
+.traffic-controls { flex-wrap: wrap; }
+.traffic-controls button, .traffic-toggle { border: 1px solid #45655a; border-radius: 8px; color: #e2f5eb; padding: 7px 10px; font-size: 12px; }
+.traffic-toggle { display: grid; place-items: center; width: 40px; height: 40px; }
+.traffic-controls button[aria-pressed=true] { background: #a2f8c4; color: #142820; border-color: #a2f8c4; }
+.traffic-controls button:hover, .traffic-toggle:hover { border-color: #a2f8c4; }
+.traffic-replay button:focus-visible { outline-color: #a2f8c4; }
+@media (prefers-reduced-motion: no-preference) {
+ .traffic-replay[data-playing=true] .traffic-dot { animation: traffic-beacon 1.6s ease-in-out infinite; }
+ @keyframes traffic-beacon { 50% { filter: drop-shadow(0 0 7px #a2f8c4); } }
+}

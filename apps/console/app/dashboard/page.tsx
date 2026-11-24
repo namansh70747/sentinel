@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Activity, ArrowDownRight, ArrowUpRight, Cloud, Layers, Radio, Terminal } from 'lucide-react';
 import { redirect } from 'next/navigation';
+import { TrafficReplay } from '../../components/traffic-replay';
 import { WorkspaceSetup } from '../../components/workspace-setup';
 import { currentIdentity, getAuth } from '../../lib/auth';
 
@@ -42,5 +43,6 @@ export default async function Dashboard() {
         <Link href="/demo/showcase">Launch demo <ArrowDownRight size={16}/></Link>
       </section>
     </div>}
+    {!configured && <TrafficReplay />}
   </div>;
 }
