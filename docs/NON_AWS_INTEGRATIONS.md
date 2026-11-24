@@ -524,3 +524,18 @@ verification began, and within five minutes. It must have actual requests,
 covered five-minute availability and covered ten-minute latency, both meeting
 the current service SLO. Missing long-window data may still limit severity
 assessment. Grafana resolution and incident recovery are recorded independently.
+
+The isolated Grafana rerun completed two cycles per service. A cross-workspace
+database check found exactly one incident for each of the four test alert
+titles, all in their intended workspace. Recovery was verified separately
+on the earlier resolved checkout and payments incidents. Both rejected
+premature recovery, then transitioned to recovered with 100% measured
+five-minute availability and ten-minute p99 of 17.65 ms and 17.95 ms
+respectively. Fresh run IDs are ae26fd27-2b41-4674-81a2-c3da6e71a481
+(checkout) and cbe469a0-820a-4ae3-847f-c1fd195e63a6 (payments).
+
+The checkout-api run at 16:37:05 IST is a local service run. Its CloudWatch
+not-configured result is expected. The Sydney storefront-service run
+46c60134-fb78-42c5-a1c0-7d2842724734 recorded two live CloudWatch series.
+New runs capture the ECS binding version for their CloudWatch attempt.
+Cost and disaster recovery retain their own not-configured explanations.

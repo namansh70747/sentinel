@@ -47,7 +47,10 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
  const awsFailure = (error: unknown): SourceOutcome =>
   error instanceof Error && /AccessDenied|Unauthorized|ExpiredToken|InvalidClientToken/.test(error.name) ? 'denied' : 'unavailable';
  const missingAws = async (input:InvestigationInput,source:SourceName) => {
-  const reason='No enabled live AWS binding matches this worker’s approved target.';
+  const reason=source==='cost'?'AWS cost collection is not configured in this workspace.'
+   :source==='dr'?'No disaster recovery verification provider is configured.'
+   :source==='cloudwatch'?'CloudWatch metrics require this service to be linked to the worker’s approved live ECS target.'
+   :'This service is not linked to the worker’s approved live ECS target.';
   await write(input,source,'not-configured',null,{reason});
   return result(source,'not-configured',null,reason);
  };
