@@ -475,3 +475,36 @@ complete datapoints for each metric. No AWS IAM edits were required.
 The rebuilt worker persisted CloudWatch `ok` with 12 CPU and 12 memory
 datapoints in fresh run `46c60134-fb78-42c5-a1c0-7d2842724734`. ECS remained
 `live / ok` in the same run.
+
+## Two-service Grafana acceptance
+
+Run `node --import tsx scripts/dev/verify-alert-cycles.ts checkout` or replace
+`checkout` with `payments` against the running local stack. Each invocation
+uses temporary, job-filtered Grafana rules and contact points. It creates two
+fresh alert fingerprints, verifies the exact delivery and incident mapping,
+replays the firing payload to check deduplication, and waits for the persisted
+Temporal outcomes and Grafana resolved signal after healthy traffic. It measures
+Tempo bounded service search separately from direct trace lookup and checks
+the failing request's Loki correlation. A bounded search result can omit the
+exact trace even when direct lookup succeeds.
+
+The firing and resolved signal are provider evidence. The test workspace does
+not configure an SLO, so its incidents retain their escalated state. The
+product's separate SLI-based recovery transition is outside this test.
+The default checkout provisioned rule now scopes its metric queries to the
+checkout job. Payments acceptance uses its own temporary job-filtered rule.
+
+Final local run recorded these incidents and client-side query times in ms:
+
+| Service | Cycle 1 incident | Cycle 2 incident | Lookup samples | Search samples |
+| --- | --- | --- | --- | --- |
+| Checkout | 057e55be-ee73-446c-af96-a193ca4d5916 | 3c53b307-aa93-4abe-9e31-6e6364d1c9a2 | 20, 60, 14 | 41, 64, 64 |
+| Payments | e64fa35e-e809-4ede-afec-7bffca612b92 | 71c8a68b-6120-4cde-9656-639ffe1f07e9 | 13, 101, 22 | 29, 145, 74 |
+
+All four retained firing and resolved deliveries, eight investigation outcomes,
+Loki correlation and zero new investigation jobs on exact replay. Direct Tempo
+lookup succeeded for every sample. The search sample omitted the exact trace
+in the three checkout measurements. The shared Grafana instance also delivered
+a test checkout alert through the existing checkout route during acceptance,
+so these results do not establish notification route isolation. Grafana reload
+confirmed the checkout job filter was active and no temporary rules remained.

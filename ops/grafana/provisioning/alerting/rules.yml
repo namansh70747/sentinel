@@ -31,7 +31,7 @@ groups:
               refId: A
               datasource: {type: prometheus, uid: sentinel-prometheus}
               editorMode: code
-              expr: sum(rate(workload_requests_total[1m]) - rate(workload_requests_good[1m])) / clamp_min(sum(rate(workload_requests_total[1m])), 0.000001)
+              expr: sum(rate(workload_requests_total{job="workload"}[1m]) - rate(workload_requests_good{job="workload"}[1m])) / clamp_min(sum(rate(workload_requests_total{job="workload"}[1m])), 0.000001)
               instant: true
               range: false
               intervalMs: 1000
