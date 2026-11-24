@@ -1,8 +1,15 @@
+import { redirect } from 'next/navigation';
 import { WorkspaceSetup } from '../../components/workspace-setup';
 import { currentIdentity } from '../../lib/auth';
-import { redirect } from 'next/navigation';
-export const dynamic='force-dynamic';
+
+export const dynamic = 'force-dynamic';
+
 export default async function IncidentsPage() {
- if(!(await currentIdentity())) redirect('/login');
- return <section><div className="sc-eyebrow">INCIDENT OPERATIONS</div><h1>Every signal. A clear record.</h1><p>Investigate service impact and inspect the evidence collected for your workspace.</p><WorkspaceSetup section="incidents"/></section>;
+  if (!(await currentIdentity())) redirect('/login');
+
+  return <div className="ops-incidents-page">
+    <h1>Incidents</h1>
+    <p>Start a read-only investigation or review evidence from an existing incident.</p>
+    <WorkspaceSetup section="incidents" />
+  </div>;
 }
