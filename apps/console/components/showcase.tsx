@@ -1,86 +1,377 @@
-"use client";
+'use client';
+
+import {
+  Activity, BookOpen, ChevronDown, CircleHelp, Database, Download, FileCheck2,
+  FlaskConical, History, LayoutDashboard, Loader2, LockKeyhole, Maximize2,
+  Minimize2, Play, Plug, RotateCcw, Search, Server, ShieldCheck, X,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Activity, ArrowDownToLine, ArrowRight, ArrowUpRight, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, Clock3, Database, FileCheck2, FlaskConical, GitBranch, Layers, LayoutDashboard, ListFilter, Loader2, LockKeyhole, Network, Play, Plug, RefreshCw, Search, Server, Shield, ShieldCheck, Terminal, X, Zap } from 'lucide-react';
-import { chartValues, investigate, report, scenarios, type Run, type Scenario } from '../../showcase/model';
-import './showcase.css';
-import { MockAwsConnector } from './mock-aws-connector';
+import { investigate, report, scenarios, type Run, type Scenario } from '../../showcase/model';
 import { BrandMark } from './brand-mark';
+import { MockAwsConnector } from './mock-aws-connector';
+import {
+  downloadReport, formatTime, InvestigationOverview, InvestigationProgress,
+  investigationStages, resultLabels, type EvidenceTab,
+} from './showcase-investigation';
+import './showcase.css';
 import './showcase-refresh.css';
 
-type View='Overview'|'Incidents'|'Services'|'Connectors'|'Audit log'|'Demo readiness';
-const navigation: {name:View;icon:typeof Activity}[]=[{name:'Overview',icon:LayoutDashboard},{name:'Incidents',icon:Activity},{name:'Services',icon:Layers},{name:'Connectors',icon:Plug},{name:'Audit log',icon:FileCheck2}];
-const steps=['Receive alert','Create incident','Collect metrics','Read ECS context','Record evidence'];
-const time=(at:string)=>new Date(at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Kolkata'});
-function download(name:string,content:string,type='text/plain'){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-function isRun(value:unknown):value is Run {
- if(!value||typeof value!=='object')return false;
- const x=value as Run;
- return x.simulated===true&&x.source==='mock'&&Object.hasOwn(scenarios,x.scenario)&&typeof x.id==='string'&&typeof x.createdAt==='string'&&!isNaN(Date.parse(x.createdAt))&&typeof x.title==='string'&&typeof x.summary==='string'&&Array.isArray(x.leads)&&x.leads.every(y=>typeof y==='string')&&Array.isArray(x.audit)&&x.audit.every(y=>typeof y.at==='string'&&typeof y.action==='string'&&typeof y.detail==='string')&&!!x.metrics&&typeof x.metrics.availability==='number'&&typeof x.metrics.p99==='number'&&typeof x.metrics.observedAt==='string'&&(x.ecs===null||x.ecs.simulated===true)&&['complete','partial','needs-data'].includes(x.status);
+const navigation = [
+  { name: 'Overview', Icon: LayoutDashboard },
+  { name: 'Incidents', Icon: Activity },
+  { name: 'Services', Icon: Server },
+  { name: 'Connectors', Icon: Plug },
+  { name: 'Audit log', Icon: FileCheck2 },
+  { name: 'Demo readiness', Icon: BookOpen },
+] as const;
+
+type View = (typeof navigation)[number]['name'];
+const historyKey = 'sentinel-showcase-v1';
+
+const secondaryPages = {
+  Incidents: { title: 'Incident history', description: 'Open an earlier investigation or run a new scenario.' },
+  Services: { title: 'Services', description: 'Review objectives and infrastructure for the checkout service.' },
+  Connectors: { title: 'Connectors', description: 'Inspect demo data sources and test the simulated ECS connection.' },
+  'Audit log': { title: 'Audit log', description: 'Review the events recorded during demo investigations.' },
+  'Demo readiness': { title: 'Demo readiness', description: 'See which workflows you can demonstrate in this browser.' },
+};
+
+function isRun(value: unknown): value is Run {
+  if (!value || typeof value !== 'object') return false;
+  const run = value as Run;
+  return run.simulated === true && run.source === 'mock' &&
+    typeof run.scenario === 'string' && Object.hasOwn(scenarios, run.scenario) &&
+    typeof run.id === 'string' && typeof run.createdAt === 'string' && !isNaN(Date.parse(run.createdAt)) &&
+    typeof run.title === 'string' && typeof run.summary === 'string' &&
+    Array.isArray(run.leads) && run.leads.every(lead => typeof lead === 'string') &&
+    Array.isArray(run.audit) && run.audit.every(entry => entry && typeof entry.at === 'string' && typeof entry.action === 'string' && typeof entry.detail === 'string') &&
+    !!run.metrics && Number.isFinite(run.metrics.availability) && Number.isFinite(run.metrics.p99) &&
+    typeof run.metrics.observedAt === 'string' && (run.ecs === null || run.ecs?.simulated === true) &&
+    Object.hasOwn(resultLabels, run.status);
 }
-export function Showcase(){
- const [view,setView]=useState<View>('Overview');const [scenario,setScenario]=useState<Scenario>('deployment');
- const [runs,setRuns]=useState<Run[]>([]);const [selected,setSelected]=useState('');const [ready,setReady]=useState(false);
- const [tab,setTab]=useState('Evidence');const [progress,setProgress]=useState(-1);const [query,setQuery]=useState('');const [notice,setNotice]=useState('');const [showGuide,setShowGuide]=useState(false);
- const generation=useRef(0); const running=progress>=0;const run=runs.find(x=>x.id===selected)??runs[0];
- useEffect(()=>{let active=true;const requested=new URLSearchParams(window.location.search).get('view');if(requested==='Demo readiness'||navigation.some(item=>item.name===requested))setView(requested as View);try{const data=JSON.parse(localStorage.getItem('sentinel-showcase-v1')??'[]');if(Array.isArray(data)&&data.length&&data.every(isRun)){setRuns(data.slice(0,12));setSelected(data[0].id);setReady(true);return;}}catch{}
- investigate('deployment').then(x=>{if(active){setRuns([x]);setSelected(x.id);setReady(true);}});return()=>{active=false;generation.current++;};},[]);
- useEffect(()=>{if(ready)try{localStorage.setItem('sentinel-showcase-v1',JSON.stringify(runs));}catch{setNotice('Browser storage unavailable. This session still works; export your report before closing.');}},[runs,ready]);
- useEffect(()=>{if(!notice)return;const id=setTimeout(()=>setNotice(''),5000);return()=>clearTimeout(id);},[notice]);
- async function start(){if(running)return;const token=++generation.current;setView('Overview');setTab('Timeline');setProgress(0);for(let i=0;i<steps.length;i++){await new Promise(r=>setTimeout(r,440));if(token!==generation.current)return;setProgress(i);}
- try {const result=await investigate(scenario);if(token!==generation.current)return;setRuns(prev=>[result,...prev].slice(0,12));setSelected(result.id);setTab('Evidence');setNotice(`Investigation recorded · ${result.id}`);}catch{setNotice('Could not run the local scenario. Please retry.');}finally{if(token===generation.current)setProgress(-1);}}
- async function reset(){generation.current++;setProgress(-1);const result=await investigate('deployment');setRuns([result]);setSelected(result.id);setScenario('deployment');setTab('Evidence');setQuery('');setView('Overview');setNotice('Demo reset. A fresh sample investigation is ready.');}
- const filtered=runs.filter(x=>`${x.id} ${x.title} ${x.status}`.toLowerCase().includes(query.toLowerCase()));
- const degraded=run?.scenario==='deployment';const stale=run?.scenario==='stale';
- const productHref=ready&&typeof window!=='undefined'&&window.location.port==='3011'?'http://localhost:3010/dashboard':'/dashboard';
- return <div className="sc-app sc-showcase">
-  <aside className="sc-sidebar">
-   <a className="sc-brand" href="#" onClick={e=>{e.preventDefault();setView('Overview');}}><BrandMark/>Sentinel</a>
-   <div className="sc-workspace"><span className="sc-workspace-icon">S</span><div><strong>Sentinel workspace</strong><small>Sandbox environment</small></div><ChevronDown size={14}/></div>
-   <a className="sc-button sc-primary" style={{marginBottom:20}} href={productHref}>Open workspace <ArrowUpRight size={14}/></a>
-   <span className="sc-nav-label">WORKSPACE</span>
-   <nav aria-label="Main navigation">{navigation.map(({name,icon:Icon})=><button key={name} onClick={()=>setView(name)} aria-label={name} title={name} aria-current={view===name?'page':undefined} className={view===name?'active':''}><Icon size={18}/><span>{name}</span>{name==='Incidents'&&<small>{runs.length}</small>}</button>)}</nav>
-   <div className="sc-sidebar-bottom"><button className={`sc-readiness ${view==='Demo readiness'?'active':''}`} onClick={()=>setView('Demo readiness')}><FlaskConical size={17}/>Demo readiness<ArrowUpRight size={14}/></button><div className="sc-safe"><ShieldCheck size={18}/><div><strong>Read-only by design</strong><small>No infrastructure actions</small></div></div><div className="sc-user"><span>DE</span><div><strong>Demo operator</strong><small>Browser-local workspace</small></div></div></div>
-  </aside>
-  <div className="sc-main">
-   <header className="sc-topbar"><div><span className="sc-breadcrumb">Workspace</span><ChevronRight size={14}/><strong>{view}</strong></div><div className="sc-header-right"><span className="sc-environment"><i/>Sandbox</span><button aria-label="Open demo guide" title="Open demo guide" onClick={()=>setShowGuide(true)}><Bell size={18}/></button><span className="sc-avatar">DE</span></div></header>
-   <div className="sc-demo-strip"><FlaskConical size={15}/><strong>DEMO MODE</strong><span>Synthetic AWS & monitoring data. No credentials required.</span><button onClick={()=>setShowGuide(true)}>How this demo works <ArrowUpRight size={13}/></button></div>
-   <main className="sc-content">
-    <div className="sc-heading"><div><div className="sc-eyebrow">RELIABILITY CONTROL PLANE</div><h1>{view==='Overview'?'Your systems. In context.':view}</h1><p>{view==='Overview'?'From the first alert to evidence you can act on.':view==='Incidents'?'Every investigation, with its evidence and a clear record.':view==='Services'?'Service health, objectives, and deployment context.':view==='Connectors'?'Know exactly where your evidence comes from.':view==='Audit log'?'A transparent record of every demo investigation.':'A clear view of what works today and what comes next.'}</p></div><button className="sc-button sc-secondary" onClick={()=>{if(run)download(`${run.id}-report.md`,report(run),'text/markdown');}} disabled={!run}><ArrowDownToLine size={15}/>Export report</button></div>
-    {(view==='Overview'||view==='Incidents')&&<section className="sc-scenario"><div className="sc-scenario-icon"><Zap size={20}/></div><div className="sc-scenario-copy"><strong>Put Sentinel to the test</strong><span>Choose a scenario. Follow the evidence.</span></div><label className="sc-select"><span className="sc-sr-only">Investigation scenario</span><select value={scenario} disabled={running} onChange={e=>setScenario(e.target.value as Scenario)}>{Object.entries(scenarios).map(([id,x])=><option key={id} value={id}>{x.label}</option>)}</select><ChevronDown size={15}/></label><button className="sc-button sc-primary" disabled={running||!ready} onClick={start}>{running?<Loader2 className="sc-spin" size={15}/>:<Play size={15} fill="currentColor"/>}{running?'Investigating…':'Run investigation'}</button></section>}
-    {!run?<div className="sc-loading"><Loader2 size={24} className="sc-spin"/>Preparing the demo workspace…</div>:<>
-    {view==='Overview'&&<>
-     <div className="sc-stats"><Metric label="Availability" value={`${run.metrics.availability.toFixed(2)}%`} note="SLO target 99.9%" tone={stale?'neutral':degraded?'danger':'good'} icon={<Activity size={17}/>} detail={stale?'Stale data':degraded?'Below objective':'Within objective'}/><Metric label="P99 latency" value={`${run.metrics.p99.toLocaleString()} ms`} note="SLO target < 500 ms" tone={stale?'neutral':degraded?'warning':'good'} icon={<Clock3 size={17}/>} detail={stale?'Stale data':degraded?'Above objective':'Within objective'}/><Metric label="ECS tasks" value={run.ecs?`${run.ecs.runningCount} / ${run.ecs.desiredCount}`:'— / 3'} note={run.error?'Read access unavailable':`${run.ecs?.pendingCount} pending · desired 3`} tone={run.error?'danger':stale?'neutral':degraded?'warning':'good'} icon={<Server size={17}/>} detail={run.error?'Read failed':stale?'Stale data':degraded?'Degraded':'Healthy'}/><Metric label="Investigation" value={running?'In progress':run.status==='complete'?'Complete':run.status==='partial'?'Partial':'Needs data'} note={`${run.audit.length} audit events · read-only`} tone={run.status==='complete'?'good':'warning'} icon={<ShieldCheck size={17}/>} detail="Mock evidence"/></div>
-     <div className="sc-section-heading"><h2>Service signals <span className="sc-chip">checkout-api</span></h2><span className="sc-muted"><span className="sc-tiny-dot"/>Synthetic · 40-minute window</span></div>
-     <div className="sc-charts"><SignalChart key={`availability-${run.id}`} kind="availability" scenario={run.scenario}/><SignalChart key={`latency-${run.id}`} kind="latency" scenario={run.scenario}/></div>
-     <div className="sc-workbench-grid"><section className="sc-card sc-investigation"><div className="sc-card-heading"><h2><span className="sc-purple-square"><Search size={15}/></span>Investigation workbench</h2><span className={`sc-badge ${degraded?'warning':run.status==='complete'?'good':'neutral'}`}>{degraded?'SEV 2':run.status==='complete'?'Healthy':'Needs attention'}</span></div><div className="sc-incident-heading"><div className="sc-overline">{run.id} <span>•</span> checkout-api <span>•</span> {time(run.createdAt)} IST</div><h3>{run.title}</h3><p><span className="sc-dot"/> {running?'Collecting synthetic observations':run.status==='complete'?'Investigation complete':run.status==='partial'?'Investigation partial':'Fresh evidence required'}<span className="sc-source-tag">SIMULATED</span></p></div>
-      <div className="sc-tabs" role="tablist" aria-label="Investigation details">{['Evidence','Timeline','Raw data'].map(t=><button key={t} role="tab" aria-selected={tab===t} onClick={()=>setTab(t)}>{t}{t==='Evidence'&&<small>{run.ecs?3:2}</small>}</button>)}</div>
-      <div className="sc-tab-body" aria-live="polite">{running?<div className="sc-progress">{steps.map((s,i)=><div key={s} className={i<=progress?'done':''}>{i<progress?<CheckCircle2 size={18}/>:i===progress?<Loader2 size={18} className="sc-spin"/>:<Circle size={18}/>}<span>{s}</span><small>{i<progress?'done':i===progress?'running':'queued'}</small></div>)}<p>Browser-local orchestration · no Temporal or live integrations</p></div>:tab==='Evidence'?<><div className="sc-summary"><div><SparkIcon/><strong>Investigation brief</strong><span>Rule-based · mock evidence</span></div><p>{run.summary}</p></div><EvidenceRow icon={Activity} title="Service-level indicators" source="Mock Prometheus" status={stale?'Stale':degraded?'Breach':'Within SLO'} tone={stale?'warning':degraded?'danger':'good'} description={`${run.metrics.availability}% availability · ${run.metrics.p99} ms P99 · observed ${time(run.metrics.observedAt)} IST`}/><EvidenceRow icon={Server} title="ECS service context" source="Mock AWS ECS" status={run.error?'Read failed':stale?'Stale':degraded?'Degraded':'Healthy'} tone={run.error?'danger':degraded||stale?'warning':'good'} description={run.error??`${run.ecs?.runningCount} running / ${run.ecs?.desiredCount} desired · ${run.ecs?.pendingCount} pending · observed ${time(run.ecs!.observedAt)} IST`}/><EvidenceRow icon={GitBranch} title="Deployment context" source="Mock AWS ECS" status={run.error?'Unavailable':stale?'Stale':degraded?'Possible lead':'Stable'} tone={run.error||stale?'neutral':degraded?'warning':'good'} description={run.error?'Deployment evidence unavailable because the ECS read failed.':stale?'Deployment observation is stale; current rollout status is unknown.':degraded?'Task definition :42 · health-check failures · correlation is not root cause.':'Task definition :42 · rollout completed · steady state.'}/></>:tab==='Timeline'?<div className="sc-timeline">{run.audit.map((entry,i)=><div key={entry.action}><span className={entry.action.includes('failed')||entry.action.includes('stale')?'error':''}>{i===run.audit.length-1?<Check size={13}/>:<Circle size={9}/>}</span><div><strong>{entry.action.replaceAll('.',' / ').replaceAll('_',' ')}</strong><p>{entry.detail}</p><small>{time(entry.at)} IST · demo operator</small></div></div>)}</div>:<div className="sc-raw"><div><Terminal size={14}/>Evidence bundle <button onClick={()=>download(`${run.id}.json`,JSON.stringify(run,null,2),'application/json')}><ArrowDownToLine size={14}/>JSON</button></div><pre>{JSON.stringify(run,null,2)}</pre></div>}</div>
-      <div className="sc-card-footer"><LockKeyhole size={13}/>Read-only investigation. No actions executed.<button onClick={()=>setView('Audit log')}>View audit trail <ArrowRight size={13}/></button></div></section>
-      <aside className="sc-right-stack"><section className="sc-card sc-context"><div className="sc-card-heading"><h2>Service context</h2><Network size={16}/></div><div className="sc-service-name"><span><Server size={20}/></span><div><strong>checkout-api</strong><small>Commerce / Customer checkout</small></div></div><dl><div><dt>Environment</dt><dd><span className="sc-chip">sandbox</span></dd></div><div><dt>Region</dt><dd>ap-south-1</dd></div><div><dt>Cluster</dt><dd>sentinel-demo</dd></div><div><dt>Runtime</dt><dd>AWS ECS / Fargate</dd></div><div><dt>Owner</dt><dd>Commerce platform</dd></div></dl><div className="sc-topology"><span><Network size={15}/>Edge</span><i/><span className="focus"><Server size={15}/>Checkout</span><i/><span><Database size={15}/>Data</span></div><small className="sc-context-note">Illustrative topology · fictional resources</small></section>
-      <section className="sc-card sc-next"><div className="sc-card-heading"><h2>Recommended next checks</h2><ArrowUpRight size={16}/></div><ol>{run.leads.map((x,i)=><li key={x}><span>{i+1}</span>{x}</li>)}</ol><div className="sc-action-disabled"><LockKeyhole size={14}/>Remediation disabled<span>Human review required</span></div></section>
-      <section className="sc-connection-mini"><span className="sc-purple-square"><Plug size={16}/></span><div><strong>Connected to the demo</strong><p>AWS ECS, metrics & alerts are simulated.</p><button onClick={()=>setView('Connectors')}>Inspect data sources <ArrowRight size={13}/></button></div></section></aside></div>
-     <div className="sc-section-heading"><h2>Recent investigations</h2><button onClick={()=>setView('Incidents')}>View all <ArrowRight size={13}/></button></div><IncidentTable runs={runs.slice(0,4)} onSelect={x=>{setSelected(x.id);setTab('Evidence');}} selected={run.id}/>
-    </>}
-    {view==='Incidents'&&<section className="sc-card"><div className="sc-table-tools"><label><Search size={16}/><input placeholder="Search incidents or status…" value={query} onChange={e=>setQuery(e.target.value)}/></label><span><ListFilter size={14}/>{filtered.length} investigations</span></div><IncidentTable runs={filtered} selected={run.id} onSelect={x=>{setSelected(x.id);setView('Overview');setTab('Evidence');}}/></section>}
-    {view==='Services'&&<><div className="sc-service-detail sc-card"><div className="sc-service-name"><span><Server size={24}/></span><div><h2>checkout-api</h2><small>Commerce platform · sandbox · synthetic service</small></div></div><span className="sc-badge neutral">MOCK CONFIGURATION</span></div><div className="sc-two-col"><section className="sc-card sc-detail-pad"><h2>Service objectives</h2><dl><div><dt>Availability objective</dt><dd>99.9%</dd></div><div><dt>P99 latency objective</dt><dd>&lt; 500 ms</dd></div><div><dt>Freshness limit</dt><dd>5 minutes</dd></div><div><dt>Observation window</dt><dd>Synthetic 40 minutes</dd></div></dl><p className="sc-muted">These are presentation defaults, not saved workspace SLO configuration.</p></section><section className="sc-card sc-detail-pad"><h2>AWS resource binding</h2><dl><div><dt>Account</dt><dd>000000000000 (fictional)</dd></div><div><dt>Region</dt><dd>ap-south-1</dd></div><div><dt>Cluster</dt><dd>sentinel-demo</dd></div><div><dt>Service</dt><dd>checkout-api</dd></div></dl><p className="sc-muted">The mock reader rejects other resource identifiers.</p></section></div></>}
-    {view==='Connectors'&&<><div className="sc-info"><ShieldCheck size={19}/><div><strong>Connect your infrastructure. Investigate with context.</strong><p>Configure the AWS sandbox profile, verify service access, and explore source-labelled investigation evidence. This workspace uses simulated integrations.</p></div></div><MockAwsConnector/><div className="sc-connector-grid">{[{name:'Amazon ECS',icon:Server,category:'Infrastructure context',status:'Simulated',description:'Task counts, rollout state, health-check events and explicit read failures.'},{name:'Prometheus',icon:Activity,category:'Service telemetry',status:'Simulated',description:'Availability, latency and freshness scenarios with source labels.'},{name:'Grafana',icon:Bell,category:'Alert intake',status:'Simulated',description:'The Run investigation button models alert intake. No real webhook is received.'},{name:'Temporal',icon:GitBranch,category:'Workflow orchestration',status:'Not connected',description:'Browser-local stages demonstrate the workflow. Durable worker verification is pending.'},{name:'OIDC & passkeys',icon:LockKeyhole,category:'Identity & approvals',status:'Not verified',description:'The displayed operator is a local demo identity. No authenticated session is created.'},{name:'PostgreSQL',icon:Database,category:'Durable records',status:'Not connected',description:'Demo records use this browser’s local storage. Server persistence is not exercised.'}].map(c=><section className="sc-card sc-connector" key={c.name}><div><span className="sc-connector-icon"><c.icon size={24}/></span><span className={`sc-badge ${c.status==='Simulated'?'purple':'neutral'}`}>{c.status}</span></div><h2>{c.name}</h2><small>{c.category}</small><p>{c.description}</p></section>)}</div></>}
-    {view==='Audit log'&&<section className="sc-card"><div className="sc-card-heading"><h2><FileCheck2 size={17}/>Browser-local audit record</h2><span className="sc-badge neutral">SIMULATED</span></div><div className="sc-audit-table"><table><thead><tr><th>Time (IST)</th><th>Investigation</th><th>Event</th><th>Details</th></tr></thead><tbody>{runs.flatMap(r=>r.audit.map((a,i)=><tr key={`${r.id}-${i}`}><td>{time(a.at)}</td><td><button onClick={()=>{setSelected(r.id);setView('Overview');setTab('Timeline');}}>{r.id}</button></td><td><code>{a.action}</code></td><td>{a.detail}</td></tr>))}</tbody></table></div></section>}
-    {view==='Demo readiness'&&<><div className="sc-info"><FlaskConical size={20}/><div><strong>Presentation-ready prototype. Live verification remains pending.</strong><p>Use this checklist to explain the implemented demo and the integration prerequisites accurately.</p></div></div><section className="sc-card sc-readiness-list">{[['Browser-local alert → investigation → evidence','Implemented in this prototype','done'],['Four repeatable scenarios','Degradation, healthy, read failure, stale data','done'],['Evidence, audit history & report export','Saved in local browser storage; Markdown and JSON downloads','done'],['Live AWS ECS read','Requires authorized sandbox credentials and live validation','pending'],['Prometheus / Grafana → Temporal → PostgreSQL','Existing repo foundation; not exercised by this prototype','pending'],['OIDC, workspace isolation & passkeys','Existing repo foundation; real-provider verification pending','pending'],['Production remediation','Disabled. Approval and execution safety path still pending','locked']].map(([title,description,status])=><div key={title}>{status==='done'?<CheckCircle2 size={21}/>:status==='locked'?<LockKeyhole size={21}/>:<Clock3 size={21}/>}<div><strong>{title}</strong><p>{description}</p></div><span className={`sc-badge ${status==='done'?'good':'neutral'}`}>{status==='done'?'Ready':status==='locked'?'Disabled':'Pending'}</span></div>)}</section><section className="sc-card sc-detail-pad"><h2>Your 3-minute demo</h2><p>1. Run deployment degradation and explain the two failing tasks.</p><p>2. Open Timeline and Raw data to show traceable synthetic evidence.</p><p>3. Run AWS read failure, then stale observations, to show honest failure handling.</p><p>4. Export the report and finish with the live-verification checklist.</p><button className="sc-button sc-primary" onClick={()=>setView('Overview')}>Start presenting <ArrowRight size={15}/></button></section></>}
-    </>}
-    <footer className="sc-footer"><span><Shield size={13}/>Sentinel <span className="sc-footer-divider">/</span> Evidence before action.</span><div><span>Browser-local prototype</span><button onClick={reset}>Reset demo <RefreshCw size={12}/></button></div></footer>
-   </main>
-  </div>
-  {notice&&<div className="sc-toast" role="status"><CheckCircle2 size={17}/>{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={15}/></button></div>}
-  {showGuide&&<div className="sc-modal-backdrop" onClick={()=>setShowGuide(false)}><section className="sc-modal" role="dialog" aria-modal="true" aria-labelledby="guide-title" onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==="Escape")setShowGuide(false);if(e.key==="Tab"){const buttons=e.currentTarget.querySelectorAll<HTMLButtonElement>("button");const first=buttons[0],last=buttons[buttons.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}}><button className="sc-modal-close" aria-label="Close guide" autoFocus onClick={()=>setShowGuide(false)}><X size={20}/></button><span className="sc-guide-icon"><FlaskConical size={28}/></span><h2 id="guide-title">A complete story. Synthetic data.</h2><p>Choose a scenario and run an investigation. Sentinel assembles synthetic metrics and ECS context, explains the findings, and records the evidence locally.</p><ul><li>All AWS identifiers are fictional. Generated demo credentials only configure the local mock; they cannot access AWS.</li><li>Stages run in the browser, not Temporal. Records stay in this browser, not PostgreSQL.</li><li>Findings use deterministic rules, not a live AI model.</li><li>No login, infrastructure changes or automatic remediation occur.</li></ul><button className="sc-button sc-primary" onClick={()=>setShowGuide(false)}>Got it. Let’s investigate <ArrowRight size={15}/></button></section></div>}
- </div>;
+
+export function Showcase({ standalone = false }: { standalone?: boolean }) {
+  const [view, setView] = useState<View>('Overview');
+  const [scenario, setScenario] = useState<Scenario>('deployment');
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [selected, setSelected] = useState('');
+  const [ready, setReady] = useState(false);
+  const [tab, setTab] = useState<EvidenceTab>('Evidence');
+  const [step, setStep] = useState<number | null>(null);
+  const [query, setQuery] = useState('');
+  const [notice, setNotice] = useState('');
+  const [presenting, setPresenting] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const generation = useRef(0);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const running = step !== null;
+  const run = runs.find(record => record.id === selected) ?? runs[0];
+
+  useEffect(() => {
+    const token = ++generation.current;
+    const params = new URLSearchParams(window.location.search);
+    const requested = navigation.find(item => item.name === params.get('view'));
+    if (requested) setView(requested.name);
+    setPresenting(params.get('present') === '1');
+    setOffline(window.location.protocol === 'file:');
+
+    async function load() {
+      let history: Run[] = [];
+      try {
+        const saved: unknown = JSON.parse(localStorage.getItem(historyKey) ?? '[]');
+        if (Array.isArray(saved)) history = saved.filter(isRun).slice(0, 12);
+      } catch {
+        // A saved investigation is optional. The demo can start with a fresh sample.
+      }
+      if (!history.length) history = [await investigate('deployment')];
+      if (token !== generation.current) return;
+      setRuns(history);
+      setSelected(history[0].id);
+      setScenario(history[0].scenario);
+    }
+
+    void load()
+      .catch(() => { if (token === generation.current) setNotice('Could not load the sample. Run an investigation to begin.'); })
+      .finally(() => { if (token === generation.current) setReady(true); });
+    return () => { generation.current++; };
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !runs.length) return;
+    try {
+      localStorage.setItem(historyKey, JSON.stringify(runs));
+    } catch {
+      setNotice('Browser storage is unavailable. Export a report to keep your results.');
+    }
+  }, [runs, ready]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(''), 5000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!presenting) return;
+    function exitPresentation(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !dialog.current?.open) setPresenting(false);
+    }
+    window.addEventListener('keydown', exitPresentation);
+    return () => window.removeEventListener('keydown', exitPresentation);
+  }, [presenting]);
+
+  function navigate(nextView: View) {
+    if (view === nextView) return;
+    setView(nextView);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function selectRun(record: Run, detail: EvidenceTab = 'Evidence') {
+    setSelected(record.id);
+    setScenario(record.scenario);
+    setTab(detail);
+    navigate('Overview');
+  }
+
+  async function start() {
+    if (!ready || running || resetting) return;
+    const token = ++generation.current;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    navigate('Overview');
+    setNotice('');
+    setStep(0);
+    try {
+      for (let index = 0; index < investigationStages.length; index++) {
+        setStep(index);
+        await new Promise(resolve => window.setTimeout(resolve, reducedMotion ? 120 : 510));
+        if (token !== generation.current) return;
+      }
+      const result = await investigate(scenario);
+      if (token !== generation.current) return;
+      setRuns(history => [result, ...history].slice(0, 12));
+      setSelected(result.id);
+      setTab('Evidence');
+      setNotice('Investigation recorded · ' + result.id);
+    } catch {
+      if (token === generation.current) setNotice('Could not complete the scenario. Try running it again.');
+    } finally {
+      if (token === generation.current) setStep(null);
+    }
+  }
+
+  async function reset() {
+    if (running || resetting) return;
+    const token = ++generation.current;
+    setResetting(true);
+    try {
+      const result = await investigate('deployment');
+      if (token !== generation.current) return;
+      setRuns([result]);
+      setQuery('');
+      selectRun(result);
+      setNotice('Demo reset to the sample investigation.');
+    } catch {
+      if (token === generation.current) setNotice('Could not reset the demo. Try again.');
+    } finally {
+      if (token === generation.current) setResetting(false);
+    }
+  }
+
+  const filter = query.trim().toLowerCase();
+  const filtered = runs.filter(record => (record.id + ' ' + record.title + ' ' + resultLabels[record.status]).toLowerCase().includes(filter));
+  const scenarioForm = <div className="sc-scenario-controls">
+    <label className="sc-scenario-field">
+      <span>Investigation scenario</span>
+      <span className="sc-scenario-select">
+        <select value={scenario} disabled={running || resetting} onChange={event => setScenario(event.currentTarget.value as Scenario)}>
+          {Object.entries(scenarios).map(([id, item]) => <option key={id} value={id}>{item.label}</option>)}
+        </select>
+        <ChevronDown size={16} aria-hidden="true"/>
+      </span>
+    </label>
+    <button type="button" className="sc-lab-primary" disabled={!ready || running || resetting} onClick={start}>
+      {running ? <Loader2 size={17} className="sc-spin" aria-hidden="true"/> : <Play size={16} fill="currentColor" aria-hidden="true"/>}
+      {running ? 'Investigating…' : 'Run investigation'}
+    </button>
+  </div>;
+
+  return <div className="sc-app sc-showcase" data-presenting={presenting}>
+    <a className="sc-lab-skip" href="#demo-content">Skip to content</a>
+    {!presenting && <aside className="sc-lab-sidebar">
+      <button type="button" className="sc-lab-brand" onClick={() => navigate('Overview')}><BrandMark/><span>Sentinel</span></button>
+      <nav aria-label="Demo navigation">
+        {navigation.map(({ name, Icon }) => <button key={name} type="button" onClick={() => navigate(name)} aria-current={view === name ? 'page' : undefined}>
+          <Icon size={17} aria-hidden="true"/><span>{name}</span>
+        </button>)}
+      </nav>
+      <div className="sc-lab-sidebar-end">
+        <span className="sc-lab-readonly"><ShieldCheck size={17} aria-hidden="true"/> Read-only workspace</span>
+        {!offline && <a href={standalone ? 'http://localhost:3010/dashboard' : '/dashboard'}>Open workspace</a>}
+      </div>
+    </aside>}
+    <div className="sc-lab-main">
+      <header className="sc-lab-topbar">
+        <div className="sc-lab-breadcrumb">
+          {presenting && <BrandMark/>}
+          <span>Demo workspace</span><span aria-hidden="true">/</span>
+          {presenting && view !== 'Overview' && <button type="button" className="sc-control" onClick={() => navigate('Overview')}>Overview</button>}
+          <strong>{view}</strong>
+        </div>
+        <div className="sc-lab-actions">
+          <span className="sc-lab-simulation"><FlaskConical size={14} aria-hidden="true"/> Simulated data</span>
+          <button type="button" className="sc-control sc-presentation-toggle" onClick={() => setPresenting(current => !current)}>
+            {presenting ? <Minimize2 size={16} aria-hidden="true"/> : <Maximize2 size={16} aria-hidden="true"/>}
+            {presenting ? 'Exit presentation' : 'Present'}
+          </button>
+          <button type="button" className="sc-control sc-help-button" aria-label="How the demo works" onClick={() => dialog.current?.showModal()}>
+            <CircleHelp size={18} aria-hidden="true"/>
+          </button>
+        </div>
+      </header>
+      <main id="demo-content" className="sc-lab-content" tabIndex={-1}>
+        {view === 'Overview' ? <>
+          <section className="sc-lab-hero" data-running={running}>
+            <div className="sc-lab-hero-main">
+              <div><h1>Incident overview</h1><p>Trace a checkout alert through service metrics, deployment context, and evidence.</p></div>
+              {scenarioForm}
+            </div>
+            <InvestigationProgress step={step} run={run}/>
+          </section>
+          {!ready && <p className="sc-lab-loading" role="status"><Loader2 className="sc-spin" size={19} aria-hidden="true"/> Loading the sample investigation…</p>}
+          {run && <>
+            {running && <p className="sc-lab-previous">Showing the previous result while the new scenario runs.</p>}
+            <InvestigationOverview key={run.id} run={run} tab={tab} onTabChange={setTab} onAudit={() => navigate('Audit log')}/>
+            {!presenting && <>
+              <div className="sc-lab-section-heading">
+                <h2>Recent investigations</h2>
+                <button type="button" className="sc-control" onClick={() => navigate('Incidents')}>View history</button>
+              </div>
+              <IncidentTable runs={runs.slice(0, 4)} selected={run.id} onSelect={selectRun}/>
+            </>}
+          </>}
+        </> : <>
+          <header className="sc-lab-page-heading">
+            <div><h1>{secondaryPages[view].title}</h1><p>{secondaryPages[view].description}</p></div>
+            {view === 'Incidents' && scenarioForm}
+          </header>
+          {view === 'Incidents' && <section className="sc-card sc-history">
+            <div className="sc-history-toolbar">
+              <label className="sc-history-search"><Search size={17} aria-hidden="true"/>
+                <input type="search" aria-label="Search investigations" placeholder="Search investigations" value={query} onChange={event => setQuery(event.currentTarget.value)}/>
+              </label>
+              <span>{filtered.length} {filtered.length === 1 ? 'investigation' : 'investigations'}</span>
+            </div>
+            <IncidentTable runs={filtered} selected={run?.id} onSelect={selectRun}/>
+          </section>}
+          {view === 'Services' && <ServicesPage/>}
+          {view === 'Connectors' && <ConnectorsPage/>}
+          {view === 'Audit log' && <AuditLog runs={runs} onSelect={record => selectRun(record, 'Timeline')}/>}
+          {view === 'Demo readiness' && <DemoReadiness onOverview={() => navigate('Overview')}/>}
+        </>}
+        <footer className="sc-lab-footer">
+          <span><LockKeyhole size={14} aria-hidden="true"/> Demo records are stored in this browser.</span>
+          <div>
+            <button type="button" className="sc-control" disabled={!run} onClick={() => run && downloadReport(run.id + '-report.md', report(run), 'text/markdown')}>
+              <Download size={15} aria-hidden="true"/> Export report
+            </button>
+            {!presenting && <button type="button" className="sc-control" disabled={!ready || running || resetting} onClick={reset}>
+              <RotateCcw size={15} aria-hidden="true"/> Reset demo
+            </button>}
+          </div>
+        </footer>
+      </main>
+    </div>
+    <dialog className="sc-demo-guide" ref={dialog} aria-labelledby="sc-demo-guide-title">
+      <header><FlaskConical size={23} aria-hidden="true"/><button type="button" className="sc-control" onClick={() => dialog.current?.close()} aria-label="Close guide"><X size={19} aria-hidden="true"/></button></header>
+      <h2 id="sc-demo-guide-title">How the demo works</h2>
+      <p>Choose a scenario and run an investigation. Sentinel simulates the alert, metrics, and ECS read, then records the evidence in this browser.</p>
+      <p>Use the replay to compare availability and latency. Open the evidence and timeline to explain what happened, then export the report.</p>
+      <button type="button" className="sc-lab-primary" onClick={() => dialog.current?.close()}>Back to demo</button>
+    </dialog>
+    <div className="sc-lab-notice" role="status">{notice}</div>
+  </div>;
 }
-function SparkIcon(){return <span className="sc-spark-symbol">✧</span>;}
-function Metric({label,value,note,tone,icon,detail}:{label:string;value:string;note:string;tone:string;icon:React.ReactNode;detail:string}){return <section className="sc-card sc-metric"><div><span>{label}</span>{icon}</div><strong>{value}</strong><div><span>{note}</span><small className={tone}>{detail}</small></div></section>;}
-function EvidenceRow({icon:Icon,title,source,status,tone,description}:{icon:typeof Activity;title:string;source:string;status:string;tone:string;description:string}){return <article className="sc-evidence-row"><span className="sc-evidence-icon"><Icon size={18}/></span><div><div><strong>{title}</strong><span className={`sc-badge ${tone}`}>{status}</span></div><p>{description}</p><small>{source} · simulated</small></div></article>;}
-function SignalChart({kind,scenario}:{kind:'availability'|'latency';scenario:Scenario}){
- const values=chartValues(scenario,kind);const min=kind==='availability'?97:0,max=kind==='availability'?100.3:1500;
- const coords=values.map((v,i)=>`${(i/39)*560},${105-(v-min)/(max-min)*95}`).join(' ');const target=105-((kind==='availability'?99.9:500)-min)/(max-min)*95;
- const stale=scenario==='stale';
- return <section className="sc-card sc-chart"><div className="sc-chart-top"><h3>{kind==='availability'?'Availability':'P99 latency'}</h3><span><i className={kind==='availability'?'purple':'blue'}/> {kind==='availability'?'Success rate':'Response time'}<span className="sc-chart-target-key"/>SLO</span></div><div className="sc-chart-body"><div className="sc-chart-y"><span>{kind==='availability'?'100%':'1.5 s'}</span><span>{kind==='availability'?'98.5%':'750 ms'}</span><span>{kind==='availability'?'97%':'0 ms'}</span></div><svg viewBox="0 0 560 120" role="img" aria-label={`Synthetic ${kind} over 40 minutes${stale?', stale observations':''}`} preserveAspectRatio="none"><defs><linearGradient id={`fill-${kind}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={kind==='availability'?'#8067d8':'#5697d5'} stopOpacity=".15"/><stop offset="100%" stopColor="#fff" stopOpacity="0"/></linearGradient></defs>{[15,60,105].map(y=><line key={y} x1="0" x2="560" y1={y} y2={y} stroke="#eceef3" strokeDasharray="3 4"/>)}<line x1="0" x2="560" y1={target} y2={target} stroke="#aeb9ac" strokeDasharray="5 5"/>{scenario==='deployment'&&<><rect x="342" y="0" width="218" height="114" fill="#fdf1ee" opacity=".6"/><line x1="342" x2="342" y1="0" y2="114" stroke="#dcad9f" strokeDasharray="3 4"/><text x="350" y="12" fill="#a56e5c" fontSize="9">Deployment :42</text></>}<polygon points={`0,120 ${coords} 560,120`} fill={`url(#fill-${kind})`}/><polyline points={coords} fill="none" stroke={kind==='availability'?'#8067d8':'#5697d5'} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/></svg></div><div className="sc-chart-x"><span>−40 min</span><span>−30 min</span><span>−20 min</span><span>−10 min</span><span>{stale?'25 min ago':'Observation'}</span></div></section>;
+
+function IncidentTable({ runs, selected, onSelect }: {
+  runs: Run[]; selected?: string; onSelect: (run: Run) => void;
+}) {
+  if (!runs.length) return <div className="sc-table-empty"><Search size={21} aria-hidden="true"/><p>No matching investigations.</p></div>;
+  return <div className="sc-lab-table" role="region" aria-label="Investigation records" tabIndex={0}>
+    <table>
+      <thead><tr><th scope="col">Investigation</th><th scope="col">Scenario</th><th scope="col">Status</th><th scope="col">Created (IST)</th></tr></thead>
+      <tbody>{runs.map(record => <tr key={record.id} data-selected={selected === record.id}>
+        <td><button type="button" onClick={() => onSelect(record)}>{record.title}<small>{record.id}</small></button></td>
+        <td>{scenarios[record.scenario].label}</td>
+        <td><span className="sc-result-badge" data-tone={record.status === 'complete' ? 'good' : 'warning'}>{resultLabels[record.status]}</span></td>
+        <td>{formatTime(record.createdAt)}</td>
+      </tr>)}</tbody>
+    </table>
+  </div>;
 }
-function IncidentTable({runs,onSelect,selected}:{runs:Run[];onSelect:(r:Run)=>void;selected:string}){return <div className="sc-incident-table"><table><thead><tr><th>Investigation</th><th>Service</th><th>Status</th><th>Source</th><th>Created (IST)</th><th><span className="sc-sr-only">Open</span></th></tr></thead><tbody>{runs.map(r=><tr key={r.id} className={selected===r.id?'selected':''}><td><button onClick={()=>onSelect(r)}><span className={`sc-incident-indicator ${r.scenario==='deployment'?'warning':'neutral'}`}/><div><strong>{r.title}</strong><small>{r.id}</small></div></button></td><td>checkout-api</td><td><span className={`sc-badge ${r.status==='complete'?'good':'warning'}`}>{r.status==='needs-data'?'Needs data':r.status==='partial'?'Partial':'Complete'}</span></td><td><span className="sc-source-tag">MOCK</span></td><td>{time(r.createdAt)}</td><td><button aria-label={`Open ${r.id}`} onClick={()=>onSelect(r)}><ArrowUpRight size={16}/></button></td></tr>)}</tbody></table>{!runs.length&&<div className="sc-empty"><Search size={24}/><strong>No matching investigations</strong><span>Try another search or run a new scenario.</span></div>}</div>;}
+
+function ServicesPage() {
+  return <div className="sc-lab-columns">
+    <section className="sc-card sc-context-panel">
+      <h2><Activity size={17} aria-hidden="true"/> Service objectives</h2>
+      <dl>
+        <div><dt>Service</dt><dd>checkout-api</dd></div>
+        <div><dt>Availability</dt><dd>99.9%</dd></div>
+        <div><dt>P99 latency</dt><dd>&lt; 500 ms</dd></div>
+        <div><dt>Freshness limit</dt><dd>5 minutes</dd></div>
+      </dl>
+    </section>
+    <section className="sc-card sc-context-panel">
+      <h2><Server size={17} aria-hidden="true"/> ECS resource binding</h2>
+      <dl>
+        <div><dt>Account</dt><dd>000000000000 (fictional)</dd></div>
+        <div><dt>Region</dt><dd>ap-south-1</dd></div>
+        <div><dt>Cluster</dt><dd>sentinel-demo</dd></div>
+        <div><dt>Owner</dt><dd>Commerce platform</dd></div>
+      </dl>
+    </section>
+  </div>;
+}
+
+function ConnectorsPage() {
+  const sources = [
+    { title: 'Prometheus', detail: 'Availability, latency, and freshness observations.', Icon: Activity },
+    { title: 'Grafana', detail: 'Sample alert intake that starts investigations.', Icon: Activity },
+    { title: 'Amazon ECS', detail: 'Task counts, service health, and deployment observations.', Icon: Server },
+    { title: 'Temporal', detail: 'The live workspace uses Temporal. The demo runs its stages in the browser.', Icon: History },
+    { title: 'OIDC and passkeys', detail: 'Organization identity and passkeys are used in a configured workspace.', Icon: LockKeyhole },
+    { title: 'PostgreSQL', detail: 'The live workspace persists records in PostgreSQL. Demo records use browser storage.', Icon: Database },
+  ];
+  return <div className="sc-lab-connectors">
+    <MockAwsConnector/>
+    <div className="sc-lab-columns" aria-label="Data sources">{sources.map(({ title, detail, Icon }) =>
+      <section className="sc-card sc-context-panel" key={title}><h2><Icon size={17} aria-hidden="true"/> {title}</h2><p>{detail}</p></section>)}</div>
+  </div>;
+}
+
+function AuditLog({ runs, onSelect }: { runs: Run[]; onSelect: (run: Run) => void }) {
+  return <div className="sc-lab-table" role="region" aria-label="Audit events" tabIndex={0}>
+    <table>
+      <thead><tr><th scope="col">Time (IST)</th><th scope="col">Investigation</th><th scope="col">Event</th><th scope="col">Details</th></tr></thead>
+      <tbody>{runs.flatMap(run => run.audit.map((entry, index) => <tr key={run.id + '-' + index}>
+        <td>{formatTime(entry.at)}</td>
+        <td><button type="button" onClick={() => onSelect(run)}>{run.id}</button></td>
+        <td><code>{entry.action}</code></td>
+        <td>{entry.detail}</td>
+      </tr>))}</tbody>
+    </table>
+  </div>;
+}
+
+function DemoReadiness({ onOverview }: { onOverview: () => void }) {
+  return <section className="sc-card sc-context-panel sc-readiness-panel">
+    <h2><FlaskConical size={18} aria-hidden="true"/> Walkthrough</h2>
+    <ol>
+      <li>Run deployment degradation and review the availability and latency charts.</li>
+      <li>Jump to the deployment, then open the evidence and incident timeline.</li>
+      <li>Run AWS read failure or stale observations to show how Sentinel reports gaps.</li>
+      <li>Export an investigation report with the findings and audit history.</li>
+    </ol>
+    <button type="button" className="sc-lab-primary" onClick={onOverview}>Start walkthrough</button>
+  </section>;
+}

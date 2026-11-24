@@ -44,7 +44,7 @@ export default async function Dashboard() {
           <p>Bring alerts, service context, and evidence together when every minute matters.</p>
           <div className="signal-actions">
             <Link className="signal-launch" href="/demo/showcase">Explore the demo</Link>
-            <Link className="signal-secondary" href="/login">Set up workspace</Link>
+            <Link className="signal-secondary" href="/demo/showcase?present=1">Presentation mode</Link>
           </div>
           <div className="signal-assurance"><ShieldCheck size={16} aria-hidden="true"/> Read-only investigations</div>
         </header>
