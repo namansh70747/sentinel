@@ -406,3 +406,16 @@ configuration snapshot, including the captured live mode. To invalidate a token
 immediately, revoke it at the provider; configuration disable is not credential
 revocation. Notification publishing still requires its current approved destination.
 This behavior is explicit in the connection form and covered by regression tests.
+
+## Live acceptance checkpoint
+
+- The existing Sydney ECS service passed the exact DescribeServices preflight
+  through the configured AWS read role from the host. The same assumed role
+  received AccessDenied on the CloudWatch GetMetricStatistics probe. Worker
+  binding, CloudWatch evidence and browser investigation acceptance are pending.
+- The live telemetry test now exercises checkout and payments separately.
+  Both cases passed with a service-specific metric, request and trace correlation
+  in Loki, and Tempo search and retrieval. Grafana firing and recovery cycles
+  are a separate acceptance gate.
+- Local ntfy publish and authenticated subscription receipt passed. This check
+  did not exercise the product delivery ledger.
