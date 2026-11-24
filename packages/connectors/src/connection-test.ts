@@ -17,6 +17,7 @@ export async function testConnection(input:TestInput,transport?:ConnectorHttpCli
    if(snapshot.truncated)return result('unavailable','kubernetes.resources.read',snapshot.records.length,'coverage-truncated');
    return result(snapshot.records.length?'verified-read':'empty','kubernetes.resources.read',snapshot.records.length);
   }
+  if(input.provider==='ecs')return result('unsupported','ecs.service.read',0,'service-binding-required');
   if(input.provider==='slack')return result('unsupported','webhook.delivery',0,'approved-publication-required');
   if(input.provider==='github'){
    if(!input.secret.token)return result('not-configured','identity.read',0,'credential-required');

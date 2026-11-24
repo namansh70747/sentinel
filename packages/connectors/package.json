@@ -11,10 +11,12 @@
     "./connection-test": "./src/connection-test.ts",
     "./bound-telemetry": "./src/bound-telemetry.ts",
     "./notification-delivery": "./src/notification-delivery.ts",
-    "./kubernetes":"./src/kubernetes.ts",
-    "./github-sync": "./src/github-sync.ts"
+    "./kubernetes": "./src/kubernetes.ts",
+    "./github-sync": "./src/github-sync.ts",
+    "./cloudwatch-ecs": "./src/cloudwatch-ecs.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1176.0",
     "@aws-sdk/client-ecs": "^3.1161.0",
     "@aws-sdk/credential-providers": "^3.1161.0"
   }

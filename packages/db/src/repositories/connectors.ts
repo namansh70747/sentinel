@@ -57,6 +57,11 @@ export class ConnectorRepository {
    if(connector.config_version!==expectedVersion)throw new ConnectorStateError('version-conflict','Connector version changed');
    if(provider==='kubernetes'&&connector.config.namespace!==parsed.namespace)throw new ConnectorStateError('version-conflict','Service namespace must match the connection namespace');
    if(!(await client.query('SELECT id FROM services WHERE workspace_id=$1 AND id=$2',[workspaceId,serviceId])).rowCount)throw new ConnectorStateError('not-found','Service not found');
+   if(provider==='ecs'){
+    const target=(await client.query('SELECT resource_arn,account_id,region FROM services WHERE workspace_id=$1 AND id=$2',[workspaceId,serviceId])).rows[0];
+    const arn=String(parsed.serviceArn).split(':');
+    if(target.resource_arn!==parsed.serviceArn||target.account_id!==arn[4]||target.region!==arn[3])throw new ConnectorStateError('version-conflict','ECS binding must match the catalogued AWS service');
+   }
    await client.query('INSERT INTO service_connector_bindings(workspace_id,service_id,provider,connector_id,mapping) VALUES($1,$2,$3,$4,$5) ON CONFLICT(workspace_id,service_id,provider) DO UPDATE SET connector_id=EXCLUDED.connector_id,mapping=EXCLUDED.mapping,updated_at=now()',[workspaceId,serviceId,provider,connectorId,parsed]);
    await this.db.appendAuditInTransaction(client,workspaceId,actor,'connector.bound',{connectorId,serviceId,provider,configVersion:expectedVersion});return {serviceId,connectorId,provider,mapping:parsed};
   });

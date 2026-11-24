@@ -1,3 +1,4 @@
+import { readEcsMetrics } from '@sentinel/connectors/cloudwatch-ecs';
 import { EcsReadClient, LokiClient, MOCK_SERVICE_ARN, MockEcsReadClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, simulateCloudWatch, simulateCost, simulateDr, SloReadError } from '@sentinel/connectors';
 import type { Provenance, SourceName, SourceOutcome, SourceResult } from '@sentinel/contracts';
 import { correlateEcsChange } from '@sentinel/engine';
@@ -36,6 +37,20 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
   });
  };
  const result = (source: SourceName, outcome: SourceOutcome, provenance: Provenance | null, summary: string): SourceResult => ({ source, outcome, provenance, summary });
+ const liveAws = async (input: InvestigationInput) => {
+  const binding = await connections?.resolve(input.workspaceId,input.serviceId,'ecs',input.runId);
+  if(!binding)return null;
+  const {serviceArn,readRoleArn}=binding.mapping;
+  if(typeof serviceArn!=='string'||typeof readRoleArn!=='string'||serviceArn!==process.env.SENTINEL_ECS_SERVICE_ARN||readRoleArn!==process.env.SENTINEL_READ_ROLE_ARN)return null;
+  return {serviceArn,readRoleArn,binding,region:serviceArn.split(':')[3],accountId:serviceArn.split(':')[4]};
+ };
+ const awsFailure = (error: unknown): SourceOutcome =>
+  error instanceof Error && /AccessDenied|Unauthorized|ExpiredToken|InvalidClientToken/.test(error.name) ? 'denied' : 'unavailable';
+ const missingAws = async (input:InvestigationInput,source:SourceName) => {
+  const reason='No enabled live AWS binding matches this worker’s approved target.';
+  await write(input,source,'not-configured',null,{reason});
+  return result(source,'not-configured',null,reason);
+ };
  const redact=(value:unknown,secrets:string[]):unknown=>{
   if(typeof value==='string')return secrets.filter(Boolean).reduce((text,secret)=>text.replaceAll(secret,'[REDACTED]'),value);
   if(Array.isArray(value))return value.map(item=>redact(item,secrets));
@@ -125,6 +140,20 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
   },
   async collectEcs(input: InvestigationInput): Promise<SourceResult> {
    const prior=await cached(input,'ecs');if(prior)return prior;
+   if(connections){
+    const target=await liveAws(input);
+    if(!target)return missingAws(input,'ecs');
+    try{
+     const observation=await new EcsReadClient(target).observe(target.serviceArn);
+     await write(input,'ecs','ok','live',{...observation,configVersion:target.binding.configVersion},{observedAt:observation.observedAt});
+     return result('ecs','ok','live','Live ECS observation recorded.');
+    }catch(error){
+     const outcome=awsFailure(error);
+     await write(input,'ecs',outcome,'live',{serviceArn:target.serviceArn,reason:outcome});
+     return result('ecs',outcome,'live','ECS service read failed.');
+    }
+   }
+
    let mode: 'off' | 'simulated' | 'live';
    try { mode = readEcsMode(); }
    catch (error) {
@@ -209,18 +238,37 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
   },
   async collectCloudwatch(input: InvestigationInput): Promise<SourceResult> {
    const prior=await cached(input,'cloudwatch');if(prior)return prior;
+   if(connections){
+    const target=await liveAws(input);
+    if(!target)return missingAws(input,'cloudwatch');
+    try{
+     const observation=await readEcsMetrics(target.serviceArn,target.readRoleArn,target.binding.observedAt??new Date());
+     const populated=observation.metrics.filter(metric=>metric.points.length);
+     const outcome=populated.length===2?'ok':populated.length?'uncovered':'empty';
+     const timestamps=populated.flatMap(metric=>metric.points.map(point=>point.timestamp)).sort();
+     await write(input,'cloudwatch',outcome,'live',{...observation,configVersion:target.binding.configVersion},{observedAt:timestamps.at(-1)??null});
+     return result('cloudwatch',outcome,'live','CloudWatch metric read completed.');
+    }catch(error){
+     const outcome=awsFailure(error);
+     await write(input,'cloudwatch',outcome,'live',{serviceArn:target.serviceArn,reason:outcome});
+     return result('cloudwatch',outcome,'live','CloudWatch metric read failed.');
+    }
+   }
+
    const detail = simulateCloudWatch('000000000000');
    await write(input, 'cloudwatch', 'ok', 'simulated', detail);
    return result('cloudwatch', 'ok', 'simulated', 'Simulated CloudWatch is not a measurement.');
   },
   async collectCost(input: InvestigationInput): Promise<SourceResult> {
    const prior=await cached(input,'cost');if(prior)return prior;
+   if(connections)return missingAws(input,'cost');
    const detail = simulateCost('000000000000');
    await write(input, 'cost', 'ok', 'simulated', detail);
    return result('cost', 'ok', 'simulated', 'Simulated cost is not a bill.');
   },
   async collectDr(input: InvestigationInput): Promise<SourceResult> {
    const prior=await cached(input,'dr');if(prior)return prior;
+   if(connections)return missingAws(input,'dr');
    const detail = simulateDr('000000000000');
    await write(input, 'dr', 'ok', 'simulated', detail);
    return result('dr', 'ok', 'simulated', 'Restore was not attempted.');

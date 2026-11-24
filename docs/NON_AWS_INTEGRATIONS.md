@@ -419,3 +419,41 @@ This behavior is explicit in the connection form and covered by regression tests
   are a separate acceptance gate.
 - Local ntfy publish and authenticated subscription receipt passed. This check
   did not exercise the product delivery ledger.
+
+## Live ECS worker setup
+
+Apply migrations and run `node --import tsx scripts/dev/import-local-ecs.ts`
+to bind the exact configured Sydney ECS service to the local workspace. The
+import reads the existing AWS configuration in `.env` and creates ignored
+private files under `.local/`. The ECS workspace connector stores the service
+and read-role ARNs in its binding. Fresh investigations capture that binding
+and its connector version. The worker independently matches both ARNs against
+its approved target settings before making an AWS call.
+
+Start with the standard Compose files and append `compose.aws-live.yml` last.
+Pass `--env-file .local/compose.env --env-file .local/aws-live.env` to Compose.
+For local Kubernetes, include `compose.kubernetes.yml` before the AWS override.
+The AWS credential file is mounted only in the read worker. The legacy
+simulation activities remain available to explicit fixture callers. The
+workspace-backed worker reports unmapped AWS, cost and DR sources as
+not configured. CloudWatch uses the assumed role and requires
+`cloudwatch:GetMetricStatistics`; denied access is recorded as denied.
+
+A manual product sync job for the configured GitHub repository succeeded.
+The incremental window returned empty commits, Actions and deployments, and
+two existing check records were unchanged. Existing delivery history contains
+one Slack acknowledgement and two confirmed ntfy deliveries. The Kubernetes
+reader credential was refreshed, and namespace reads and permission checks passed.
+
+Three fresh Temporal investigations recorded live ECS evidence for the exact
+Sydney target, including one after the read worker restarted. Run IDs:
+`58a0c125-2653-44ef-b4df-40d25ae014bb`,
+`61c0b919-b3b3-491e-baa1-3aa79d57eee5`, and
+`c749787e-5076-4c60-9ade-ddcf4247051d`. All three recorded CloudWatch as
+denied. A further investigation refresh from the authenticated browser
+displayed live ECS evidence. The database and Temporal test suite passed
+148 tests with 10 skipped.
+
+The console container persisted eight live Kubernetes records after joining
+the owned cluster network. An approved Slack test on #new-channel recorded
+sent, and a local ntfy test recorded confirmed with a provider message ID.

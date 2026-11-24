@@ -1,0 +1,14 @@
+# Include after the local and Kubernetes Compose files.
+services:
+  worker-read:
+    environment:
+      SENTINEL_ECS_MODE: off
+      AWS_SHARED_CREDENTIALS_FILE: /run/secrets/aws_read_credentials
+      AWS_PROFILE: sentinel
+      AWS_EC2_METADATA_DISABLED: "true"
+      SENTINEL_ECS_SERVICE_ARN: ${SENTINEL_ECS_SERVICE_ARN:?Set the approved ECS service ARN}
+      SENTINEL_READ_ROLE_ARN: ${SENTINEL_READ_ROLE_ARN:?Set the approved AWS read role ARN}
+    secrets: [aws_read_credentials]
+secrets:
+  aws_read_credentials:
+    file: ./.local/aws-read-credentials
