@@ -437,7 +437,7 @@ The AWS credential file is mounted only in the read worker. The legacy
 simulation activities remain available to explicit fixture callers. The
 workspace-backed worker reports unmapped AWS, cost and DR sources as
 not configured. CloudWatch uses the assumed role and requires
-`cloudwatch:GetMetricStatistics`; denied access is recorded as denied.
+`cloudwatch:GetMetricData`; denied access is recorded as denied.
 
 A manual product sync job for the configured GitHub repository succeeded.
 The incremental window returned empty commits, Actions and deployments, and
@@ -467,3 +467,11 @@ frozen runs. Changing that allowlist can make outstanding runs for the old
 target unavailable for collection. Drain outstanding runs before changing
 the target if they must finish. To replace source credentials, run the import
 with `--rotate`, then recreate the worker so the Docker file mount is refreshed.
+
+The Sydney role denies GetMetricStatistics but permits GetMetricData. The
+collector now uses one GetMetricData query for CPU and memory, with the same
+ECS dimensions and a bounded one-hour window. The live SDK probe returned 12
+complete datapoints for each metric. No AWS IAM edits were required.
+The rebuilt worker persisted CloudWatch `ok` with 12 CPU and 12 memory
+datapoints in fresh run `46c60134-fb78-42c5-a1c0-7d2842724734`. ECS remained
+`live / ok` in the same run.

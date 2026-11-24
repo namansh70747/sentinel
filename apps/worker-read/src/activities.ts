@@ -244,7 +244,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
     try{
      const observation=await readEcsMetrics(target.serviceArn,target.readRoleArn,target.binding.observedAt??new Date());
      const populated=observation.metrics.filter(metric=>metric.points.length);
-     const outcome=populated.length===2?'ok':populated.length?'uncovered':'empty';
+     const outcome=observation.metrics.some(metric=>metric.partial)?'uncovered':populated.length===2?'ok':populated.length?'uncovered':'empty';
      const timestamps=populated.flatMap(metric=>metric.points.map(point=>point.timestamp)).sort();
      await write(input,'cloudwatch',outcome,'live',{...observation,configVersion:target.binding.configVersion},{observedAt:timestamps.at(-1)??null});
      return result('cloudwatch',outcome,'live','CloudWatch metric read completed.');
