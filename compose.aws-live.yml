@@ -8,6 +8,9 @@ services:
       AWS_EC2_METADATA_DISABLED: "true"
       SENTINEL_ECS_SERVICE_ARN: ${SENTINEL_ECS_SERVICE_ARN:?Set the approved ECS service ARN}
       SENTINEL_READ_ROLE_ARN: ${SENTINEL_READ_ROLE_ARN:?Set the approved AWS read role ARN}
+      SENTINEL_COST_TAG_KEY: ${SENTINEL_COST_TAG_KEY:-}
+      SENTINEL_COST_TAG_VALUE: ${SENTINEL_COST_TAG_VALUE:-}
+      SENTINEL_BACKUP_RESOURCE_ARN: ${SENTINEL_BACKUP_RESOURCE_ARN:-}
     secrets: [aws_read_credentials]
 secrets:
   aws_read_credentials:

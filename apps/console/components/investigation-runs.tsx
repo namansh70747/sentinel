@@ -1,4 +1,5 @@
 'use client';
+import { CloudWatchDetail, EvidenceContext } from './source-list';
 import { useEffect,useRef,useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 interface Run {id:string;status:string;created_at:string;summary:string|null}
@@ -40,7 +41,7 @@ export function InvestigationRuns({workspaceId,incidentId}:{workspaceId:string;i
    {!detail?<p role="status">Loading run evidence…</p>:<><p role="status">{detail.status} · {detail.evidence.length} of {detail.attempts.length} source attempts persisted</p>{detail.summary&&<p>{detail.summary}</p>}
     <div className="sc-connector-grid">{detail.attempts.map(attempt=>{const evidence=detail.evidence.find(row=>row.source===attempt.source);return <article className="sc-card sc-detail-pad" key={attempt.id}>
      <h3>{attempt.source}</h3><p>{evidence?.outcome??'Pending'} · {evidence?.provenance??'No observation'}</p><small>{attempt.config_version?`Connector configuration v${attempt.config_version}`:'No connector snapshot'}</small>
-     {evidence&&<><p>Collected {new Date(evidence.collected_at).toLocaleString()}</p><details><summary>View evidence envelope</summary><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:320,overflow:'auto'}}>{JSON.stringify(evidence.detail,null,2)}</pre></details></>}
+     {evidence&&<><p>{evidence.observed_at?'Observed '+new Date(evidence.observed_at).toLocaleString():'Recorded '+new Date(evidence.collected_at).toLocaleString()}</p>{attempt.source==='cloudwatch'&&<CloudWatchDetail detail={evidence.detail}/>}<EvidenceContext source={attempt.source} detail={evidence.detail}/><details><summary>View evidence envelope</summary><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:320,overflow:'auto'}}>{JSON.stringify(evidence.detail,null,2)}</pre></details></>}
     </article>;})}</div>
    </>}
   </>}

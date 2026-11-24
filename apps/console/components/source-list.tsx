@@ -1,9 +1,8 @@
 export type SourceRow = { source: string; outcome: string; provenance: string | null; observed_at: string | null; window_covered: boolean | null; detail: unknown };
-function CloudWatchDetail({ detail }: { detail: unknown }) {
+export function CloudWatchDetail({ detail }: { detail: unknown }) {
  if (!detail || typeof detail !== 'object') return null;
  const metrics = 'metrics' in detail && Array.isArray(detail.metrics) ? detail.metrics : [];
  return <>
-  {'reason' in detail && typeof detail.reason === 'string' && detail.reason !== '' && <span>CloudWatch: {detail.reason.replaceAll('-', ' ')}</span>}
   {metrics.map(metric => {
    const label = metric?.metric === 'CPUUtilization' ? 'CPU' : metric?.metric === 'MemoryUtilization' ? 'Memory' : null;
    const latest = Array.isArray(metric?.points) ? metric.points.at(-1) : null;
@@ -21,7 +20,22 @@ export function SourceList({ sources }: { sources: SourceRow[] }) {
    <span>{source.outcome}</span>
    <span>{source.provenance === 'simulated' ? 'Simulated lead, not a cause' : source.provenance === 'live' ? 'Live' : 'Not configured'}</span>
    {source.source === 'cloudwatch' && <CloudWatchDetail detail={source.detail} />}
+   <EvidenceContext source={source.source} detail={source.detail} />
    {source.source === 'prometheus' && source.window_covered === false && <span>Six-hour window is not covered.</span>}
   </li>)}
  </ul>;
+}
+
+export function EvidenceContext({source,detail}:{source:string;detail:unknown}) {
+ if (!detail || typeof detail!=='object') return null;
+ if ('reason' in detail && typeof detail.reason==='string') return <span>{detail.reason}</span>;
+ if (source==='cost' && 'days' in detail && Array.isArray(detail.days)) return <section aria-label="Tagged AWS cost">
+  <p>Daily unblended cost for the configured billing tag.</p>
+  {detail.days.length>0&&<ul>{detail.days.map((day,index)=><li key={index}>{day.date} · {day.amount} {day.currency}{day.estimated?' · estimated':''}</li>)}</ul>}
+ </section>;
+ if (source==='dr' && 'recoveryPoints' in detail && Array.isArray(detail.recoveryPoints)) return <section aria-label="AWS Backup inventory">
+  <p>{detail.recoveryPoints.length} recovery points. Restore verification is pending.</p>
+  {detail.recoveryPoints.length>0&&<ul>{detail.recoveryPoints.map((point,index)=><li key={index}>{point.createdAt?new Date(point.createdAt).toLocaleString():'Unknown date'} · {point.status??'Unknown status'}</li>)}</ul>}
+ </section>;
+ return null;
 }

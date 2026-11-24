@@ -23,7 +23,7 @@ export class InvestigationRepository {
   const id=randomUUID();
   const run=(await client.query('INSERT INTO investigation_runs(workspace_id,id,incident_id,service_id,requested_by) VALUES($1,$2,$3,$4,$5) RETURNING *',[workspaceId,id,incidentId,incident.service_id,actor])).rows[0];
   for(const source of [...sources,'kubernetes'] as SourceName[]){
-   const binding=(await client.query("SELECT b.mapping,c.id,c.config_version FROM service_connector_bindings b JOIN connector_instances c ON c.workspace_id=b.workspace_id AND c.id=b.connector_id AND c.provider=b.provider WHERE b.workspace_id=$1 AND b.service_id=$2 AND b.provider=$3 AND c.mode='live'",[workspaceId,incident.service_id,source==='cloudwatch'?'ecs':source])).rows[0];
+   const binding=(await client.query("SELECT b.mapping,c.id,c.config_version FROM service_connector_bindings b JOIN connector_instances c ON c.workspace_id=b.workspace_id AND c.id=b.connector_id AND c.provider=b.provider WHERE b.workspace_id=$1 AND b.service_id=$2 AND b.provider=$3 AND c.mode='live'",[workspaceId,incident.service_id,['cloudwatch','cost','dr'].includes(source)?'ecs':source])).rows[0];
    if(source==='kubernetes'&&!binding)continue;
    let mapping=binding?.mapping??{};
    if(source==='prometheus'){

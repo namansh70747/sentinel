@@ -12,3 +12,15 @@ it('rejects fixture accounts, short service ARNs, and cross-account read roles',
   readRoleArn: readRoleArn.replace('123456789012','000000000000'),
  })).toThrow();
 });
+
+it('retains optional AWS context scope on the service mapping', () => {
+ const mapping={
+  serviceArn:'arn:aws:ecs:ap-southeast-2:123456789012:service/cluster/checkout',
+  readRoleArn:'arn:aws:iam::123456789012:role/sentinel-read',
+  costTagKey:'Application',
+  costTagValue:'checkout',
+  backupResourceArn:'arn:aws:rds:ap-southeast-2:123456789012:db:checkout',
+ };
+ expect(parseBinding('ecs',mapping)).toEqual(mapping);
+ expect(()=>parseBinding('ecs',{...mapping,costTagValue:'checkout\nother'})).toThrow();
+});

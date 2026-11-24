@@ -1,3 +1,4 @@
+import { isRegionalBackupResource, readRecoveryPoints, readTaggedCost } from '@sentinel/connectors/aws-context';
 import { readEcsMetrics } from '@sentinel/connectors/cloudwatch-ecs';
 import { EcsReadClient, LokiClient, MOCK_SERVICE_ARN, MockEcsReadClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, simulateCloudWatch, simulateCost, simulateDr, SloReadError } from '@sentinel/connectors';
 import type { Provenance, SourceName, SourceOutcome, SourceResult } from '@sentinel/contracts';
@@ -47,8 +48,8 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
  const awsFailure = (error: unknown): SourceOutcome =>
   error instanceof Error && /AccessDenied|Unauthorized|ExpiredToken|InvalidClientToken/.test(error.name) ? 'denied' : 'unavailable';
  const missingAws = async (input:InvestigationInput,source:SourceName) => {
-  const reason=source==='cost'?'AWS cost collection is not configured in this workspace.'
-   :source==='dr'?'No disaster recovery verification provider is configured.'
+  const reason=source==='cost'?'Cost Explorer needs an approved AWS service and an explicit billing tag.'
+   :source==='dr'?'AWS Backup needs an approved AWS service and a supported protected resource.'
    :source==='cloudwatch'?'CloudWatch metrics require this service to be linked to the worker’s approved live ECS target.'
    :'This service is not linked to the worker’s approved live ECS target.';
   await write(input,source,'not-configured',null,{reason});
@@ -264,14 +265,45 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
   },
   async collectCost(input: InvestigationInput): Promise<SourceResult> {
    const prior=await cached(input,'cost');if(prior)return prior;
-   if(connections)return missingAws(input,'cost');
+   if(connections){
+    const target=await liveAws(input), key=target?.binding.mapping.costTagKey, value=target?.binding.mapping.costTagValue;
+    if(!target||typeof key!=='string'||typeof value!=='string'||key!==process.env.SENTINEL_COST_TAG_KEY||value!==process.env.SENTINEL_COST_TAG_VALUE)return missingAws(input,'cost');
+    try{
+     const detail=await readTaggedCost(target,key,value,target.binding.observedAt??new Date());
+     const outcome=detail.partial?'uncovered':detail.days.length?'ok':'empty';
+     await write(input,'cost',outcome,'live',{...detail,accountId:target.accountId,configVersion:target.binding.configVersion},{observedAt:new Date().toISOString()});
+     return result('cost',outcome,'live','Cost Explorer returned tagged costs.');
+    }catch(error){
+     const outcome=awsFailure(error);
+     await write(input,'cost',outcome,'live',{reason:outcome==='denied'?'AWS denied ce:GetCostAndUsage for the configured read role.':'Cost Explorer could not return cost data.'});
+     return result('cost',outcome,'live','Cost Explorer read failed.');
+    }
+   }
    const detail = simulateCost('000000000000');
    await write(input, 'cost', 'ok', 'simulated', detail);
    return result('cost', 'ok', 'simulated', 'Simulated cost is not a bill.');
   },
   async collectDr(input: InvestigationInput): Promise<SourceResult> {
    const prior=await cached(input,'dr');if(prior)return prior;
-   if(connections)return missingAws(input,'dr');
+   if(connections){
+    const target=await liveAws(input), resource=target?.binding.mapping.backupResourceArn;
+    if(!target||typeof resource!=='string'||resource!==process.env.SENTINEL_BACKUP_RESOURCE_ARN)return missingAws(input,'dr');
+    if(!isRegionalBackupResource(resource,target)){
+     const reason='Map a supported backup resource in the approved ECS account and region.';
+     await write(input,'dr','not-configured',null,{reason});
+     return result('dr','not-configured',null,reason);
+    }
+    try{
+     const detail=await readRecoveryPoints(target,resource);
+     const outcome=detail.partial?'uncovered':detail.recoveryPoints.length?'ok':'empty';
+     await write(input,'dr',outcome,'live',{...detail,configVersion:target.binding.configVersion},{observedAt:new Date().toISOString()});
+     return result('dr',outcome,'live','AWS Backup recovery point inventory recorded.');
+    }catch(error){
+     const outcome=awsFailure(error);
+     await write(input,'dr',outcome,'live',{reason:outcome==='denied'?'AWS denied backup:ListRecoveryPointsByResource for the configured read role.':'AWS Backup could not return recovery points.'});
+     return result('dr',outcome,'live','AWS Backup read failed.');
+    }
+   }
    const detail = simulateDr('000000000000');
    await write(input, 'dr', 'ok', 'simulated', detail);
    return result('dr', 'ok', 'simulated', 'Restore was not attempted.');

@@ -539,3 +539,30 @@ not-configured result is expected. The Sydney storefront-service run
 46c60134-fb78-42c5-a1c0-7d2842724734 recorded two live CloudWatch series.
 New runs capture the ECS binding version for their CloudWatch attempt.
 Cost and disaster recovery retain their own not-configured explanations.
+
+### Optional AWS cost and recovery evidence
+
+The live worker accepts these local `.env` mappings through
+`node --import tsx scripts/dev/import-local-ecs.ts` and the AWS Compose override:
+
+- `SENTINEL_COST_TAG_KEY` and `SENTINEL_COST_TAG_VALUE` select an activated
+  cost-allocation tag. The read role needs `ce:GetCostAndUsage`. Daily unblended
+  costs span the previous seven complete UTC days and are scoped to the linked
+  account and tag. They represent the tagged resources, which may include
+  multiple services. Cost Explorer API requests can incur AWS charges.
+- `SENTINEL_BACKUP_RESOURCE_ARN` selects a supported dependent resource in the
+  ECS account and Region. The role needs `backup:ListRecoveryPointsByResource`.
+  Inventory is read-only and bounded to 20 entries. A recovery point does not
+  establish restore success. An ECS service ARN is not a supported resource
+  for this integration.
+
+After adding the mappings, recreate the read worker with the AWS Compose
+override and refresh the approved AWS service's investigation. The current
+read role denied both API probes. Neither mapping existed in local `.env`.
+AWS account IAM, billing tags and backup resources were left intact.
+
+The service binding freezes the tag and backup resource with the approved ECS
+connector snapshot in each fresh investigation. The worker also checks these
+captured values against the current explicit AWS override before calling a
+provider. A worker target change can therefore stop an outstanding run from
+reading the old target.

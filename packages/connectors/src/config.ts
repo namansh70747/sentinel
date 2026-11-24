@@ -32,10 +32,11 @@ export function parseConnector(value:unknown):ConnectorDraft {
  return {provider,name:text(row.name,160),mode:row.mode as 'live'|'off',config:parsed};
 }
 export function parseBinding(provider:Provider,value:unknown):Record<string,string|number>{
- const keys:Record<Provider,string[]>={prometheus:['goodQuery','totalQuery','latencyQuery','goodCoverageQuery','totalCoverageQuery','latencyCoverageQuery','scrapeIntervalSeconds'],loki:['query'],tempo:['serviceName'],github:['owner','repo'],grafana:['endpointId'],ntfy:[],slack:[],ecs:['serviceArn','readRoleArn'],kubernetes:['namespace','labelSelector']};
+ const keys:Record<Provider,string[]>={prometheus:['goodQuery','totalQuery','latencyQuery','goodCoverageQuery','totalCoverageQuery','latencyCoverageQuery','scrapeIntervalSeconds'],loki:['query'],tempo:['serviceName'],github:['owner','repo'],grafana:['endpointId'],ntfy:[],slack:[],ecs:['serviceArn','readRoleArn','costTagKey','costTagValue','backupResourceArn'],kubernetes:['namespace','labelSelector']};
  const row=object(value,keys[provider]);const result:Record<string,string|number>={};
  for(const key of keys[provider]){
   if(key==='scrapeIntervalSeconds'){const interval=row[key]??15;if(!Number.isInteger(interval)||Number(interval)<1||Number(interval)>300)throw new Error('Invalid scrape interval');result[key]=Number(interval);}
+  else if(provider==='ecs'&&['costTagKey','costTagValue','backupResourceArn'].includes(key)){if(row[key]!==undefined)result[key]=text(row[key],512);}
   else result[key]=text(row[key]);
  }
  if(provider==='prometheus'&&(!String(result.goodQuery).includes('{window}')||!String(result.totalQuery).includes('{window}')))throw new Error('Request queries require {window}');
