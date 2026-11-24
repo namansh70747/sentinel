@@ -10,7 +10,8 @@ const checks = {
  prometheus: ['request monitoring', 'request health'],
  ecs: ['AWS service access', 'AWS service status'],
  cloudwatch: ['CloudWatch metrics', 'CPU and memory metrics'],
- loki: ['application logs', 'application logs'],
+ loki: ['application logs', 'Loki application logs'],
+ 'cloudwatch-logs':['AWS log monitoring','AWS application logs'],
  tempo: ['request tracing', 'request traces'],
  kubernetes: ['cluster monitoring', 'cluster status'],
  github: ['repository access', 'recent code changes'],
@@ -143,4 +144,82 @@ export async function rankWithBedrock(
   const choice=result.output?.message?.content?.find(item=>typeof item.text==='string')?.text?.trim()??'';
   return {choice,inputTokens:result.usage?.inputTokens,outputTokens:result.usage?.outputTokens};
  }finally{client.destroy();}
+}
+
+export function hostedAdvisoryKeys() {
+ return {gemini:process.env.GEMINI_API_KEY?.trim(),nvidia:process.env.NVIDIA_API_KEY?.trim()};
+}
+
+async function boundedModelJson(response:Response):Promise<unknown> {
+ const reader=response.body?.getReader();
+ if(!reader)return null;
+ const decoder=new TextDecoder();
+ let size=0,body='';
+ try{
+  for(;;){
+   const {done,value}=await reader.read();
+   if(done)return JSON.parse(body+decoder.decode());
+   size+=value.byteLength;
+   if(size>32768){await reader.cancel();return null;}
+   body+=decoder.decode(value,{stream:true});
+  }
+ }finally{reader.releaseLock();}
+}
+
+export async function rankWithHostedProviders(
+ candidates:readonly RecommendationEvidence[],
+ keys:{gemini?:string;nvidia?:string},
+ request:typeof fetch=fetch,
+) {
+ if(!keys.gemini&&!keys.nvidia)return null;
+ const outcomes=new Set(['ok','unavailable','stale','not-configured','uncovered','empty','denied']);
+ const approved=new Map<string,string>();
+ for(const {source,outcome,provenance} of candidates){
+  if((provenance==='live'||provenance===null)&&Object.hasOwn(checks,source)&&outcomes.has(outcome)&&!approved.has(source)){
+   approved.set(source,outcome);
+  }
+  if(approved.size===6)break;
+ }
+ if(!approved.size)return null;
+ const ids=[...approved.keys()];
+ const prompt='Select the first check from these approved alternatives. Return only a JSON object with a source field. '+JSON.stringify([...approved].map(([source,outcome])=>({source,outcome})));
+ const configs=[
+  {provider:'gemini',key:keys.gemini,model:'gemini-3.1-flash-lite',url:'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent'},
+  {provider:'nvidia',key:keys.nvidia,model:'meta/llama-3.1-8b-instruct',url:'https://integrate.api.nvidia.com/v1/chat/completions'},
+ ] as const;
+ const started=performance.now();
+ let attempts=0;
+ let last=null as {provider:string;model:string;choice:string|null;status:'accepted'|'invalid'|'unavailable';attempts:number;httpStatus?:number}|null;
+ for(const config of configs){
+  if(!config.key)continue;
+  const remaining=Math.floor(8000-(performance.now()-started));
+  if(remaining<=0)break;
+  const primary=config.provider==='gemini';
+  const timeout=primary&&keys.nvidia?Math.min(4000,remaining):remaining;
+  const state:NonNullable<typeof last>={provider:config.provider,model:config.model,choice:null,status:'unavailable',attempts:++attempts};
+  last=state;
+  try{
+   const headers:Record<string,string>={'content-type':'application/json'};
+   if(primary)headers['x-goog-api-key']=config.key;
+   else headers.authorization='Bearer '+config.key;
+   const body=primary?{
+    contents:[{parts:[{text:prompt}]}],
+    generationConfig:{temperature:0,maxOutputTokens:128,thinkingConfig:{thinkingLevel:'MINIMAL'},responseMimeType:'application/json',
+     responseSchema:{type:'OBJECT',properties:{source:{type:'STRING',enum:ids}},required:['source']}},
+   }:{
+    model:config.model,messages:[{role:'user',content:prompt}],stream:false,max_tokens:64,temperature:0,
+   };
+   const response=await request(config.url,{method:'POST',headers,body:JSON.stringify(body),redirect:'error',signal:AbortSignal.timeout(timeout)});
+   state.httpStatus=response.status;
+   if(!response.ok){await response.body?.cancel();continue;}
+   state.status='invalid';
+   const payload=await boundedModelJson(response) as {candidates?:{content?:{parts?:{text?:string;thought?:boolean}[]}}[];choices?:{message?:{content?:string}}[]}|null;
+   const content=primary?payload?.candidates?.[0]?.content?.parts?.find(part=>!part.thought&&typeof part.text==='string')?.text:payload?.choices?.[0]?.message?.content;
+   const parsed=JSON.parse(content??'null') as {source?:unknown}|null;
+   if(typeof parsed?.source==='string'&&Object.keys(parsed).length===1&&approved.has(parsed.source)){
+    return {...state,status:'accepted' as const,choice:parsed.source};
+   }
+  }catch{/* Preserve a bounded status only. Provider bodies and credentials stay private. */}
+ }
+ return last;
 }

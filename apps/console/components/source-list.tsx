@@ -30,6 +30,7 @@ export function SourceList({ sources }: { sources: SourceRow[] }) {
 export function EvidenceContext({source,detail}:{source:string;detail:unknown}) {
  if (!detail || typeof detail!=='object') return null;
  if ('reason' in detail && typeof detail.reason==='string') return <span>{detail.reason}</span>;
+ if (source==='cloudwatch-logs'&&'eventCount' in detail&&typeof detail.eventCount==='number') return <p>{detail.eventCount} log events sampled in the requested 24-hour window{('partial' in detail&&detail.partial)?' · partial sample':''}.</p>;
  if (source==='cost' && 'days' in detail && Array.isArray(detail.days)) return <section aria-label="Tagged AWS cost">
   <p>Daily unblended cost for the configured billing tag.</p>
   {detail.days.length>0&&<ul>{detail.days.map((day,index)=><li key={index}>{day.date} · {day.amount} {day.currency}{day.estimated?' · estimated':''}</li>)}</ul>}

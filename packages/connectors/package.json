@@ -14,6 +14,7 @@
     "./notification-delivery": "./src/notification-delivery.ts",
     "./kubernetes": "./src/kubernetes.ts",
     "./github-sync": "./src/github-sync.ts",
+    "./cloudwatch-logs": "./src/cloudwatch-logs.ts",
     "./cloudwatch-ecs": "./src/cloudwatch-ecs.ts",
     "./aws-context": "./src/aws-context.ts"
   },
@@ -21,6 +22,7 @@
     "@aws-sdk/client-backup": "^3.1176.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1176.0",
     "@aws-sdk/client-cloudwatch": "^3.1176.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.1176.0",
     "@aws-sdk/client-cost-explorer": "^3.1176.0",
     "@aws-sdk/client-ecs": "^3.1161.0",
     "@aws-sdk/credential-providers": "^3.1161.0"

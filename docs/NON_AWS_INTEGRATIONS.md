@@ -602,3 +602,50 @@ caps hosted calls at ten per workspace per rolling day and records reported
 token usage and elapsed time. Model choices are restricted to the supplied
 checks. Slack and the console continue to show the rules advisory during
 shadow evaluation.
+
+### Storefront CloudWatch Logs
+
+The AWS live override supports a separate CloudWatch Logs evidence source for
+an approved ECS binding. Set `SENTINEL_CLOUDWATCH_LOG_GROUP` and
+`SENTINEL_CLOUDWATCH_LOG_STREAM_PREFIX` together, run the ECS import, and
+restart the read worker with `compose.aws-live.yml`. For the Sydney Storefront
+deployment the approved group is `/ecs/storefront-task` and the stream prefix
+is `ecs/storefront-web/`.
+
+The ECS read role needs scoped `logs:FilterLogEvents` access. Each fresh run
+reads a bounded sample from the preceding 24 hours and persists the provider
+outcome, sample count, time window and newest event timestamp. Raw log messages
+stay out of PostgreSQL, Slack and AI input. An exhausted empty result is
+different from a partial scan with no events yet.
+
+### Gemini and NVIDIA advisory evaluator
+
+Store rotated provider keys in the ignored local `.env` as `GEMINI_API_KEY`
+and `NVIDIA_API_KEY`. Verify access before processing incidents:
+
+```sh
+node --import tsx scripts/dev/run-local-advisory.ts --check-hosted
+```
+
+The check sends fixture codes to each provider independently and prints only
+the provider, model, status, and HTTP status. For live operation, set
+`SENTINEL_ADVISORY_PROVIDER=hosted` and
+`SENTINEL_HOSTED_ADVISORY_WORKSPACES` to the approved comma-separated workspace
+IDs in the same local file. Restart the existing advisory process with
+`SENTINEL_ADVISORY_MODE=live`. Hosted mode runs without Ollama. Run one evaluator
+per stack.
+
+Gemini is primary and NVIDIA is fallback. There are at most two attempts in
+eight seconds. The worker sends source and outcome codes and accepts only an
+allowed source ID. The rules recommendation is saved first and stays available
+on timeout or failure. The worker records model metadata and the evidence-linked
+revision independently of Slack dispatch.
+
+### Permanent local payments setup
+
+Run `npm run dev:import-local` to register the fixture `payments-api`,
+its request SLO, separate Grafana intake, and service-specific Prometheus,
+Loki and Tempo bindings in the main local workspace. Recreate Grafana with
+the updated generated Compose env so it loads the payments rule and contact
+point. The importer preserves existing SLO targets and refreshes its managed
+Grafana binding if its local webhook endpoint changes.

@@ -9,7 +9,7 @@ export function serveAdvisoryMetrics(db: SentinelDatabase, port: number) {
   pending=true;
   try {
    const states = ['accepted','invalid','unavailable','skipped'] as const;
-   const providers = ['ollama','bedrock'] as const;
+   const providers = ['ollama','bedrock','gemini','nvidia'] as const;
    const totals = new Map<string,{count:number;seconds:number;measured:number}>();
    const workspaces=(await db.pool.query('SELECT id FROM workspaces ORDER BY id LIMIT 201')).rows;
    if(workspaces.length>200)throw Error('Advisory metrics workspace capacity exceeded');

@@ -11,6 +11,7 @@ loadEnvFile('.env');
 loadEnvFile('.local/compose.env');
 const mapping=parseBinding('ecs',{
  serviceArn:process.env.SENTINEL_ECS_SERVICE_ARN,readRoleArn:process.env.SENTINEL_READ_ROLE_ARN,
+ logGroupName:process.env.SENTINEL_CLOUDWATCH_LOG_GROUP||undefined,logStreamPrefix:process.env.SENTINEL_CLOUDWATCH_LOG_STREAM_PREFIX||undefined,
  costTagKey:process.env.SENTINEL_COST_TAG_KEY||undefined,costTagValue:process.env.SENTINEL_COST_TAG_VALUE||undefined,backupResourceArn:process.env.SENTINEL_BACKUP_RESOURCE_ARN||undefined,
 });
 const {serviceArn,readRoleArn}=mapping;
@@ -33,7 +34,7 @@ try {
  const connector=existing?await credentials.get(workspace,existing.connectorId):await credentials.create(workspace,actor,{provider:'ecs',name:'Sydney ECS read role',mode:'live',config:{}},{});
  if(!connector||connector.mode!=='live')throw new Error('Existing ECS connection is disabled');
  if(existing&&(existing.mapping.serviceArn!==serviceArn||existing.mapping.readRoleArn!==readRoleArn))throw new Error('Existing ECS binding differs from the approved configuration');
- if(!existing||['costTagKey','costTagValue','backupResourceArn'].some(key=>existing.mapping[key]!==mapping[key]))await credentials.bind(workspace,actor,service,'ecs',connector.id,connector.configVersion,mapping);
+ if(!existing||['costTagKey','costTagValue','backupResourceArn','logGroupName','logStreamPrefix'].some(key=>existing.mapping[key]!==mapping[key]))await credentials.bind(workspace,actor,service,'ecs',connector.id,connector.configVersion,mapping);
  const keys=[['aws_access_key_id',process.env.AWS_ACCESS_KEY_ID],['aws_secret_access_key',process.env.AWS_SECRET_ACCESS_KEY],['aws_session_token',process.env.AWS_SESSION_TOKEN]] as const;
  if(!keys[0][1]||!keys[1][1]||keys.some(([,value])=>value&&/[\r\n]/.test(value)))throw new Error('Valid AWS source credentials are required');
  const path='.local/aws-read-credentials';
@@ -58,7 +59,7 @@ try {
   try{await rename(temp,path);}finally{await unlink(temp).catch(error=>{if(error.code!=='ENOENT')throw error;});}
  }
 
- const optional=['SENTINEL_COST_TAG_KEY','SENTINEL_COST_TAG_VALUE','SENTINEL_BACKUP_RESOURCE_ARN'].map(key=>{
+ const optional=['SENTINEL_COST_TAG_KEY','SENTINEL_COST_TAG_VALUE','SENTINEL_BACKUP_RESOURCE_ARN','SENTINEL_CLOUDWATCH_LOG_GROUP','SENTINEL_CLOUDWATCH_LOG_STREAM_PREFIX'].map(key=>{
   const value=process.env[key]?.trim();
   if(!value)return '';
   if(value.length>512||/['\r\n\0]/.test(value))throw new Error('Invalid AWS context configuration: '+key);

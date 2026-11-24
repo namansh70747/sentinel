@@ -1,4 +1,5 @@
 import { isRegionalBackupResource, readRecoveryPoints, readTaggedCost } from '@sentinel/connectors/aws-context';
+import { readCloudWatchLogSummary } from '@sentinel/connectors/cloudwatch-logs';
 import { readEcsMetrics } from '@sentinel/connectors/cloudwatch-ecs';
 import { EcsReadClient, LokiClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, SloReadError } from '@sentinel/connectors';
 import type { Provenance, SourceName, SourceOutcome, SourceResult } from '@sentinel/contracts';
@@ -205,6 +206,24 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
     const summary = error instanceof Error ? error.message : 'GitHub read failed';
     await write(input, 'github', 'unavailable', 'live', { reason: summary });
     return result('github', 'unavailable', 'live', summary);
+   }
+  },
+  async collectCloudWatchLogs(input:InvestigationInput):Promise<SourceResult>{
+   const source='cloudwatch-logs';
+   const prior=await cached(input,source);if(prior)return prior;
+   const target=await liveAws(input);
+   const logGroup=target?.binding.mapping.logGroupName,prefix=target?.binding.mapping.logStreamPrefix;
+   if(!target||typeof logGroup!=='string'||typeof prefix!=='string'||logGroup!==process.env.SENTINEL_CLOUDWATCH_LOG_GROUP||
+      prefix!==process.env.SENTINEL_CLOUDWATCH_LOG_STREAM_PREFIX)return missingAws(input,source);
+   try{
+    const detail=await readCloudWatchLogSummary(target,logGroup,prefix,target.binding.observedAt??new Date());
+    const outcome=detail.partial?'uncovered':detail.eventCount?'ok':'empty';
+    await write(input,source,outcome,'live',detail,{observedAt:detail.observedAt});
+    return result(source,outcome,'live','CloudWatch Logs read completed.');
+   }catch(error){
+    const outcome=awsFailure(error);
+    await write(input,source,outcome,'live',{reason:outcome==='denied'?'AWS denied access to the mapped log group.':'CloudWatch Logs could not return observations.'});
+    return result(source,outcome,'live','CloudWatch Logs read failed.');
    }
   },
   async collectCloudwatch(input: InvestigationInput): Promise<SourceResult> {

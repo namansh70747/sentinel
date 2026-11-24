@@ -25,7 +25,8 @@ export async function deliverNotification(input:DeliveryInput,http=new Connector
     ecs:'AWS service status',
     cloudwatch:'CPU and memory metrics',
     prometheus:'request health',
-    loki:'application logs',
+    loki:'Loki application logs',
+    'cloudwatch-logs':'AWS application logs',
     tempo:'request traces',
     github:'recent code changes',
     kubernetes:'cluster status',
@@ -38,9 +39,11 @@ export async function deliverNotification(input:DeliveryInput,http=new Connector
     .map(([,label])=>label).join(', ');
    const passed=sourceNames(item=>item.outcome==='ok'&&item.provenance==='live');
    const missing=sourceNames(item=>item.outcome==='not-configured');
-   const remaining=evidence.filter(item=>item.outcome!=='not-configured'&&!(item.outcome==='ok'&&item.provenance==='live')).length;
+   const empty=sourceNames(item=>item.outcome==='empty'&&item.provenance==='live');
+   const remaining=evidence.filter(item=>item.outcome!=='not-configured'&&!(item.provenance==='live'&&['ok','empty'].includes(item.outcome))).length;
    const checks=[
     passed&&`Live checks passed: ${passed}.`,
+    empty&&`No records found: ${empty}.`,
     missing&&`Setup needed: ${missing}.`,
     remaining>0&&`Other checks without a live pass: ${remaining}.`,
    ].filter(Boolean).join('\n');
@@ -54,6 +57,7 @@ export async function deliverNotification(input:DeliveryInput,http=new Connector
    ];
    const findings=[];
    if(passed) findings.push({type:'section',text:{type:'mrkdwn',text:`*What Sentinel verified*\n${passed}`}});
+   if(empty) findings.push({type:'section',text:{type:'mrkdwn',text:`*No records found*\n${empty}`}});
    if(missing) findings.push({type:'section',text:{type:'mrkdwn',text:`*Setup needed*\n${missing}`}});
    if(remaining>0) findings.push({type:'context',elements:[{type:'plain_text',text:`Other checks without a live pass: ${remaining}.`} ]});
    if(incident) blocks.push({type:'section',text:{type:'mrkdwn',text:`*What to do next*\n${nextStep}`}});
