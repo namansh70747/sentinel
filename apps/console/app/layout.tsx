@@ -8,10 +8,11 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const authConfigured = Boolean(process.env.DATABASE_URL && process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET && process.env.SENTINEL_PUBLIC_URL);
   return (
     <html lang="en">
       <body>
-        <Shell>{children}</Shell>
+        <Shell authConfigured={authConfigured}>{children}</Shell>
       </body>
     </html>
   );

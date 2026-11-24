@@ -12,6 +12,7 @@ export function TrafficReplay() {
  const [playing, setPlaying] = useState(false);
  const [step, setStep] = useState(0);
  const gradient = useId();
+ const scrubberId = useId();
  const values = chartValues(scenario, 'latency');
  const interval = values.length - 1;
 
@@ -40,7 +41,7 @@ export function TrafficReplay() {
   </header>
   <div className="traffic-measure"><strong key={scenario + step}>{Math.round(values[step])}</strong><span>ms · p99 latency</span></div>
   <svg className="traffic-chart" viewBox="0 0 640 148" role="img" aria-label={scenarios[scenario] + ' simulated latency trend'} preserveAspectRatio="none">
-   <defs><linearGradient id={gradient} x2="0" y2="1"><stop stopColor="#8bf5bb" stopOpacity=".25"/><stop offset="1" stopColor="#8bf5bb" stopOpacity="0"/></linearGradient></defs>
+   <defs><linearGradient id={gradient} x2="0" y2="1"><stop stopColor="#9db5ff" stopOpacity=".25"/><stop offset="1" stopColor="#9db5ff" stopOpacity="0"/></linearGradient></defs>
    {[24, 60, 96, 132].map(line => <path key={line} d={'M0 ' + line + 'H640'} className="traffic-grid"/>)}
    <path d={path + ' L640 148 H0 Z'} fill={'url(#' + gradient + ')'}/>
    <path key={scenario} d={path} pathLength="1" className="traffic-line" vectorEffect="non-scaling-stroke"/>
@@ -52,9 +53,9 @@ export function TrafficReplay() {
     </g>
    </g>
   </svg>
-  <label className="traffic-scrubber">
+  <label className="traffic-scrubber" htmlFor={scrubberId}>
    <span>Replay position <output>{step + 1} / {values.length}</output></span>
-   <input type="range" min="0" max={interval} value={step} onChange={event => {setPlaying(false); setStep(Number(event.target.value));}} />
+   <input id={scrubberId} type="range" min="0" max={interval} value={step} onChange={event => {setPlaying(false); setStep(Number(event.target.value));}} />
   </label>
   <div className="traffic-controls" role="group" aria-label="Telemetry scenario">
    {Object.entries(scenarios).map(([id, label]) => <button key={id} type="button" aria-pressed={scenario === id} onClick={() => {setScenario(id as Replay); setStep(0);}}>{label}</button>)}
