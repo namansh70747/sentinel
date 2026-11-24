@@ -32,11 +32,11 @@ export function parseConnector(value:unknown):ConnectorDraft {
  return {provider,name:text(row.name,160),mode:row.mode as 'live'|'off',config:parsed};
 }
 export function parseBinding(provider:Provider,value:unknown):Record<string,string|number>{
- const keys:Record<Provider,string[]>={prometheus:['goodQuery','totalQuery','latencyQuery','goodCoverageQuery','totalCoverageQuery','latencyCoverageQuery','scrapeIntervalSeconds'],loki:['query'],tempo:['serviceName'],github:['owner','repo'],grafana:['endpointId'],ntfy:[],slack:[],ecs:['serviceArn','readRoleArn','costTagKey','costTagValue','backupResourceArn','logGroupName','logStreamPrefix'],kubernetes:['namespace','labelSelector']};
+ const keys:Record<Provider,string[]>={prometheus:['goodQuery','totalQuery','latencyQuery','goodCoverageQuery','totalCoverageQuery','latencyCoverageQuery','scrapeIntervalSeconds'],loki:['query'],tempo:['serviceName'],github:['owner','repo'],grafana:['endpointId'],ntfy:[],slack:[],ecs:['serviceArn','readRoleArn','costTagKey','costTagValue','backupResourceArn','logGroupName','logStreamPrefix','costScope','serviceProfile'],kubernetes:['namespace','labelSelector']};
  const row=object(value,keys[provider]);const result:Record<string,string|number>={};
  for(const key of keys[provider]){
   if(key==='scrapeIntervalSeconds'){const interval=row[key]??15;if(!Number.isInteger(interval)||Number(interval)<1||Number(interval)>300)throw new Error('Invalid scrape interval');result[key]=Number(interval);}
-  else if(provider==='ecs'&&['costTagKey','costTagValue','backupResourceArn','logGroupName','logStreamPrefix'].includes(key)){if(row[key]!==undefined)result[key]=text(row[key],512);}
+  else if(provider==='ecs'&&['costTagKey','costTagValue','backupResourceArn','logGroupName','logStreamPrefix','costScope','serviceProfile'].includes(key)){if(row[key]!==undefined)result[key]=text(row[key],512);}
   else result[key]=text(row[key]);
  }
  if(provider==='prometheus'&&(!String(result.goodQuery).includes('{window}')||!String(result.totalQuery).includes('{window}')))throw new Error('Request queries require {window}');
@@ -47,6 +47,8 @@ export function parseBinding(provider:Provider,value:unknown):Record<string,stri
   if((result.logGroupName!==undefined||result.logStreamPrefix!==undefined)&&
    (!/^[-._/#A-Za-z0-9]+$/.test(String(result.logGroupName??''))||
     !/^[A-Za-z0-9._/-]+\/$/.test(String(result.logStreamPrefix??''))))throw new Error('Explicit CloudWatch log group and stream prefix required');
+  if(result.costScope!==undefined&&result.costScope!=='linked-account')throw new Error('Invalid ECS cost scope');
+  if(result.serviceProfile!==undefined&&(result.serviceProfile!=='direct-stateless'||result.backupResourceArn))throw new Error('Invalid ECS service profile');
   if(!service||!role||service[2]!==role[1]||service[2]==='000000000000')throw new Error('ECS binding requires a real long service ARN and a read role in the same account');
  }
  if(provider==='loki'&&!String(result.query).startsWith('{'))throw new Error('Log query requires explicit stream labels');

@@ -1,5 +1,5 @@
 'use client';
-import { CloudWatchDetail, EvidenceContext } from './source-list';
+import { CloudWatchDetail, EvidenceContext, evidenceStatus } from './source-list';
 import { useEffect,useRef,useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 interface Run {id:string;status:string;created_at:string;summary:string|null}
@@ -43,7 +43,7 @@ export function InvestigationRuns({workspaceId,incidentId}:{workspaceId:string;i
    {!detail?<p role="status">Loading run evidence…</p>:<><p role="status">{detail.status} · {detail.evidence.length} of {detail.attempts.length} source attempts persisted</p>{detail.summary&&<p>{detail.summary}</p>}
     {detail.advisory&&<article className="sc-card sc-detail-pad"><h3>What to do next</h3>{detail.advisory.explanation&&<p>{detail.advisory.explanation}</p>}<p>{detail.advisory.nextStep}</p><small>{detail.advisory.mode==='rules'?'Evidence rules':'Model-assisted'}{detail.advisory.evidenceRefs.length>0&&' · See the marked evidence below'}</small>{detail.advisory_model_result?.durationMs!==undefined&&<p><small>Model evaluation · {detail.advisory_model_result.status} · {detail.advisory_model_result.durationMs} ms</small></p>}</article>}
     <div className="sc-connector-grid">{detail.attempts.map(attempt=>{const evidence=detail.evidence.find(row=>row.source===attempt.source);return <article className="sc-card sc-detail-pad" key={attempt.id}>
-     <h3>{attempt.source==='cloudwatch-logs'?'CloudWatch Logs':attempt.source}</h3>{detail.advisory?.evidenceRefs.includes(attempt.id)&&<small>Supports the recommendation</small>}<p>{evidence?.outcome??'Pending'} · {evidence?.provenance??'No observation'}</p><small>{attempt.config_version?`Connector configuration v${attempt.config_version}`:'No connector snapshot'}</small>
+     <h3>{attempt.source==='cloudwatch-logs'?'CloudWatch Logs':attempt.source}</h3>{detail.advisory?.evidenceRefs.includes(attempt.id)&&<small>Supports the recommendation</small>}<p>{evidenceStatus(evidence?.detail,evidence?.outcome??'Pending')} · {evidence?.provenance??'No observation'}</p><small>{attempt.config_version?`Connector configuration v${attempt.config_version}`:'No connector snapshot'}</small>
      {evidence&&<><p>{evidence.observed_at?'Observed '+new Date(evidence.observed_at).toLocaleString():'Recorded '+new Date(evidence.collected_at).toLocaleString()}</p>{attempt.source==='cloudwatch'&&<CloudWatchDetail detail={evidence.detail}/>}<EvidenceContext source={attempt.source} detail={evidence.detail}/><details><summary>View evidence envelope</summary><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:320,overflow:'auto'}}>{JSON.stringify(evidence.detail,null,2)}</pre></details></>}
     </article>;})}</div>
    </>}

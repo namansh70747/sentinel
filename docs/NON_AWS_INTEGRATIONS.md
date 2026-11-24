@@ -649,3 +649,17 @@ Loki and Tempo bindings in the main local workspace. Recreate Grafana with
 the updated generated Compose env so it loads the payments rule and contact
 point. The importer preserves existing SLO targets and refreshes its managed
 Grafana binding if its local webhook endpoint changes.
+
+### Direct, stateless AWS service profile
+
+For the approved Sydney Storefront ECS binding, the operator can set
+`SENTINEL_AWS_SERVICE_PROFILE=direct-stateless` in the local environment
+and rerun the ECS import. Fresh investigations label the directly provisioned
+deployment and backup coverage as not applicable, and uninstrumented request
+metrics and tracing as not instrumented. ECS, CloudWatch metrics and
+CloudWatch Logs continue to collect live data.
+
+Set `SENTINEL_AWS_COST_SCOPE=linked-account` to opt in to the seven complete
+UTC days of daily unblended Cost Explorer data scoped to the ECS service's
+account. This figure covers the linked account and should be read as account
+context. Existing tagged bindings can continue using explicit billing tags.

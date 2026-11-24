@@ -1,4 +1,4 @@
-import { isRegionalBackupResource, readRecoveryPoints, readTaggedCost } from '@sentinel/connectors/aws-context';
+import { isRegionalBackupResource, readRecoveryPoints, readTaggedCost, readLinkedAccountCost } from '@sentinel/connectors/aws-context';
 import { readCloudWatchLogSummary } from '@sentinel/connectors/cloudwatch-logs';
 import { readEcsMetrics } from '@sentinel/connectors/cloudwatch-ecs';
 import { EcsReadClient, LokiClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, SloReadError } from '@sentinel/connectors';
@@ -54,6 +54,21 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    :'This service is not linked to the worker’s approved live ECS target.';
   await write(input,source,'not-configured',null,{reason});
   return result(source,'not-configured',null,reason);
+ };
+ const profileEvidence=async(input:InvestigationInput, source:'github'|'dr'|'prometheus'|'tempo'|'loki')=>{
+  const target=await liveAws(input);
+  if(target?.binding.mapping.serviceProfile!=='direct-stateless'||process.env.SENTINEL_AWS_SERVICE_PROFILE!=='direct-stateless')return null;
+  if(source!=='dr'&&await connections?.resolve(input.workspaceId,input.serviceId,source,input.runId))return null;
+  const detail={
+   github:{displayStatus:'Not applicable',reason:'Provisioned directly in ECS. No deployment repository is associated with this service.'},
+   dr:{displayStatus:'Not applicable',reason:'Stateless Fargate service with no protected persistent dependencies.'},
+   prometheus:{displayStatus:'Not instrumented',reason:'No request metrics endpoint or approved health probe is configured.'},
+   tempo:{displayStatus:'Not instrumented',reason:'The ECS task has no OpenTelemetry instrumentation.'},
+   loki:{displayStatus:'Not applicable',reason:'Application logs are collected separately through CloudWatch Logs.'},
+  }[source];
+  const prior=await cached(input,source);if(prior)return prior;
+  await write(input,source,'not-configured',null,detail);
+  return result(source,'not-configured',null,detail.reason);
  };
  const redact=(value:unknown,secrets:string[]):unknown=>{
   if(typeof value==='string')return secrets.filter(Boolean).reduce((text,secret)=>text.replaceAll(secret,'[REDACTED]'),value);
@@ -113,7 +128,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    await write(input, source, 'unavailable', null, { reason: 'Evidence collection failed after retries.' });
   },
   async collectPrometheus(input: InvestigationInput): Promise<SourceResult> {
-   if(connections)return boundCollect(input,'prometheus');
+   if(connections)return await profileEvidence(input,'prometheus')??boundCollect(input,'prometheus');
    const mapping = await db.inWorkspace(input.workspaceId, async client => {
     const incident = await client.query('SELECT id, created_at FROM incidents WHERE workspace_id=$1 AND id=$2 AND service_id=$3', [input.workspaceId, input.incidentId, input.serviceId]);
     if (!incident.rowCount) throw new Error('Incident not found');
@@ -161,7 +176,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    return missingAws(input,'ecs');
   },
   async collectLoki(input: InvestigationInput): Promise<SourceResult> {
-   if(connections)return boundCollect(input,'loki');
+   if(connections)return await profileEvidence(input,'loki')??boundCollect(input,'loki');
    if (!process.env.LOKI_URL) { await write(input, 'loki', 'not-configured', null, { reason: 'Loki is not configured.' }); return result('loki', 'not-configured', null, 'Loki is not configured.'); }
    try {
     const end = Date.now();
@@ -176,7 +191,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    }
   },
   async collectTempo(input: InvestigationInput): Promise<SourceResult> {
-   if(connections)return boundCollect(input,'tempo');
+   if(connections)return await profileEvidence(input,'tempo')??boundCollect(input,'tempo');
    if (!process.env.TEMPO_URL) { await write(input, 'tempo', 'not-configured', null, { reason: 'Tempo is not configured.' }); return result('tempo', 'not-configured', null, 'Tempo is not configured.'); }
    try {
     const end = Math.floor(Date.now() / 1000);
@@ -191,7 +206,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    }
   },
   async collectGithub(input: InvestigationInput): Promise<SourceResult> {
-   if(connections)return boundCollect(input,'github');
+   if(connections)return await profileEvidence(input,'github')??boundCollect(input,'github');
    if (!process.env.GITHUB_TOKEN || !process.env.GITHUB_REPOSITORY) {
     await write(input, 'github', 'not-configured', null, { reason: 'GitHub is not configured.' });
     return result('github', 'not-configured', null, 'GitHub is not configured.');
@@ -253,12 +268,16 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    const prior=await cached(input,'cost');if(prior)return prior;
    if(connections){
     const target=await liveAws(input), key=target?.binding.mapping.costTagKey, value=target?.binding.mapping.costTagValue;
-    if(!target||typeof key!=='string'||typeof value!=='string'||key!==process.env.SENTINEL_COST_TAG_KEY||value!==process.env.SENTINEL_COST_TAG_VALUE)return missingAws(input,'cost');
+    if(!target)return missingAws(input,'cost');
+    const accountScope=target.binding.mapping.costScope==='linked-account'&&process.env.SENTINEL_AWS_COST_SCOPE==='linked-account';
+    const tagged=typeof key==='string'&&typeof value==='string'&&key===process.env.SENTINEL_COST_TAG_KEY&&value===process.env.SENTINEL_COST_TAG_VALUE;
+    if(!accountScope&&!tagged)return missingAws(input,'cost');
     try{
-     const detail=await readTaggedCost(target,key,value,target.binding.observedAt??new Date());
+     const until=target.binding.observedAt??new Date();
+     const detail=accountScope?await readLinkedAccountCost(target,until):await readTaggedCost(target,String(key),String(value),until);
      const outcome=detail.partial?'uncovered':detail.days.length?'ok':'empty';
      await write(input,'cost',outcome,'live',{...detail,accountId:target.accountId,configVersion:target.binding.configVersion},{observedAt:new Date().toISOString()});
-     return result('cost',outcome,'live','Cost Explorer returned tagged costs.');
+     return result('cost',outcome,'live','Cost Explorer returned costs for the selected scope.');
     }catch(error){
      const outcome=awsFailure(error);
      await write(input,'cost',outcome,'live',{reason:outcome==='denied'?'AWS denied ce:GetCostAndUsage for the configured read role.':'Cost Explorer could not return cost data.'});
@@ -268,6 +287,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
    return missingAws(input,'cost');
   },
   async collectDr(input: InvestigationInput): Promise<SourceResult> {
+   const profile=await profileEvidence(input,'dr');if(profile)return profile;
    const prior=await cached(input,'dr');if(prior)return prior;
    if(connections){
     const target=await liveAws(input), resource=target?.binding.mapping.backupResourceArn;

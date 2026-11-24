@@ -36,7 +36,7 @@ it('Slack sends a readable incident card with a plain-text fallback', async () =
   config: {},
   secret: {webhookUrl: 'https://hooks.slack.com/services/T/B/token'},
   message: 'Legacy UUID-heavy message',
-  incident: {title: 'Checkout latency increased', service: 'checkout-api', severity: 'sev2', status: 'escalated', evidence: [{source:'ecs',outcome:'ok',provenance:'live'},{source:'cloudwatch',outcome:'ok',provenance:'live'},{source:'cloudwatch-logs',outcome:'empty',provenance:'live'},{source:'cost',outcome:'not-configured',provenance:null},{source:'tempo',outcome:'ok',provenance:'simulated'}]},
+  incident: {title: 'Checkout latency increased', service: 'checkout-api', severity: 'sev2', status: 'escalated', evidence: [{source:'ecs',outcome:'ok',provenance:'live'},{source:'cloudwatch',outcome:'ok',provenance:'live'},{source:'cloudwatch-logs',outcome:'empty',provenance:'live'},{source:'cost',outcome:'not-configured',provenance:null},{source:'dr',outcome:'not-configured',provenance:null,displayStatus:'Not applicable'},{source:'tempo',outcome:'ok',provenance:'simulated'}]},
  }, http);
  assert.equal(result.status, 'sent');
  assert.match(JSON.stringify(payload.attachments), /#B45309/);
@@ -45,7 +45,8 @@ it('Slack sends a readable incident card with a plain-text fallback', async () =
  assert.match(JSON.stringify(payload.blocks), /Checkout latency increased/);
  assert.match(JSON.stringify(payload.blocks), /High priority/);
  assert.match(JSON.stringify(payload.attachments), /AWS service status, CPU and memory metrics/);
- assert.match(String(payload.text), /Setup needed: AWS costs/);
+ assert.match(String(payload.text), /Setup needed: AWS costs\./);
+ assert.match(String(payload.text), /Not applicable: backup availability/);
  assert.match(String(payload.text), /No records found: AWS application logs/);
  assert.doesNotMatch(String(payload.text), /Live checks passed:.*traces/i);
  assert.match(JSON.stringify(payload.blocks), /enough recent data for AWS application logs/);

@@ -1,7 +1,7 @@
 import { ConnectorHttpClient,ConnectorHttpError } from './http';
 import { parseSecret } from './config';
 import { buildIncidentAdvisory } from './incident-recommendation';
-export interface DeliveryInput {provider:'ntfy'|'slack';config:Record<string,string>;secret:Record<string,string>;message:string;incident?:{title:string;service:string;severity:string;status:string;advisory?:{nextStep:string;explanation?:string}|null;evidence?:{source:string;outcome:string;provenance:string|null}[]};testDelivery?:boolean}
+export interface DeliveryInput {provider:'ntfy'|'slack';config:Record<string,string>;secret:Record<string,string>;message:string;incident?:{title:string;service:string;severity:string;status:string;advisory?:{nextStep:string;explanation?:string}|null;evidence?:{source:string;outcome:string;provenance:string|null;displayStatus?:string|null;scope?:string|null}[]};testDelivery?:boolean}
 export interface DeliveryResult {status:'sent'|'confirmed'|'unknown'|'failed';errorCode?:string;messageId?:string}
 export async function deliverNotification(input:DeliveryInput,http=new ConnectorHttpClient({deadlineAt:Date.now()+20000})):Promise<DeliveryResult>{
  let published=false,attempted=false;
@@ -30,7 +30,7 @@ export async function deliverNotification(input:DeliveryInput,http=new Connector
     tempo:'request traces',
     github:'recent code changes',
     kubernetes:'cluster status',
-    cost:'AWS costs',
+    cost:incident?.evidence?.some(item=>item.source==='cost'&&item.scope==='linked-account-cost')?'linked AWS account costs':'AWS costs',
     dr:'backup availability',
    };
    const evidence=incident?.evidence??[];
@@ -38,12 +38,16 @@ export async function deliverNotification(input:DeliveryInput,http=new Connector
     .filter(([source])=>evidence.some(item=>item.source===source&&matches(item)))
     .map(([,label])=>label).join(', ');
    const passed=sourceNames(item=>item.outcome==='ok'&&item.provenance==='live');
-   const missing=sourceNames(item=>item.outcome==='not-configured');
+   const missing=sourceNames(item=>item.outcome==='not-configured'&&!item.displayStatus);
+   const notApplicable=sourceNames(item=>item.displayStatus==='Not applicable');
+   const notInstrumented=sourceNames(item=>item.displayStatus==='Not instrumented');
    const empty=sourceNames(item=>item.outcome==='empty'&&item.provenance==='live');
    const remaining=evidence.filter(item=>item.outcome!=='not-configured'&&!(item.provenance==='live'&&['ok','empty'].includes(item.outcome))).length;
    const checks=[
     passed&&`Live checks passed: ${passed}.`,
     empty&&`No records found: ${empty}.`,
+    notApplicable&&`Not applicable: ${notApplicable}.`,
+    notInstrumented&&`Not instrumented: ${notInstrumented}.`,
     missing&&`Setup needed: ${missing}.`,
     remaining>0&&`Other checks without a live pass: ${remaining}.`,
    ].filter(Boolean).join('\n');
@@ -58,6 +62,8 @@ export async function deliverNotification(input:DeliveryInput,http=new Connector
    const findings=[];
    if(passed) findings.push({type:'section',text:{type:'mrkdwn',text:`*What Sentinel verified*\n${passed}`}});
    if(empty) findings.push({type:'section',text:{type:'mrkdwn',text:`*No records found*\n${empty}`}});
+   if(notApplicable) findings.push({type:'section',text:{type:'mrkdwn',text:`*Not applicable*\n${notApplicable}`}});
+   if(notInstrumented) findings.push({type:'section',text:{type:'mrkdwn',text:`*Not instrumented*\n${notInstrumented}`}});
    if(missing) findings.push({type:'section',text:{type:'mrkdwn',text:`*Setup needed*\n${missing}`}});
    if(remaining>0) findings.push({type:'context',elements:[{type:'plain_text',text:`Other checks without a live pass: ${remaining}.`} ]});
    if(incident) blocks.push({type:'section',text:{type:'mrkdwn',text:`*What to do next*\n${nextStep}`}});

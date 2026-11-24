@@ -46,7 +46,7 @@ export class NotificationRepository {
   const runId=/^investigation:([a-f0-9-]{36})$/i.exec(delivery.event_key)?.[1];
   const incident=connection.provider==='slack'&&runId
    ? (await client.query(`SELECT i.title, i.severity, s.name AS service, r.status, coalesce(nullif(r.advisory_model_result->'revision','null'::jsonb),r.advisory) AS advisory,
-       (SELECT coalesce(json_agg(json_build_object('source',e.source,'outcome',e.outcome,'provenance',e.provenance)), '[]'::json)
+       (SELECT coalesce(json_agg(json_build_object('source',e.source,'outcome',e.outcome,'provenance',e.provenance,'displayStatus',e.detail->>'displayStatus','scope',e.detail->>'scope')), '[]'::json)
         FROM investigation_evidence e WHERE e.workspace_id=r.workspace_id AND e.run_id=r.id) AS evidence
       FROM investigation_runs r
       JOIN incidents i ON i.workspace_id=r.workspace_id AND i.id=r.incident_id

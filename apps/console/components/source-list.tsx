@@ -18,7 +18,7 @@ export function SourceList({ sources }: { sources: SourceRow[] }) {
  return <ul className="source-list">
   {sources.map(source => <li key={source.source} className={source.provenance === 'simulated' ? 'simulated' : 'live'}>
    <strong>{source.source}</strong>
-   <span>{source.outcome}</span>
+   <span>{evidenceStatus(source.detail,source.outcome)}</span>
    <span>{source.provenance === 'simulated' ? 'Simulated lead, not a cause' : source.provenance === 'live' ? 'Live' : 'No observation'}</span>
    {source.source === 'cloudwatch' && <CloudWatchDetail detail={source.detail} />}
    <EvidenceContext source={source.source} detail={source.detail} />
@@ -27,12 +27,17 @@ export function SourceList({ sources }: { sources: SourceRow[] }) {
  </ul>;
 }
 
+export function evidenceStatus(detail:unknown,outcome:string) {
+ if(detail&&typeof detail==='object'&&'displayStatus' in detail&&typeof detail.displayStatus==='string')return detail.displayStatus;
+ return outcome;
+}
+
 export function EvidenceContext({source,detail}:{source:string;detail:unknown}) {
  if (!detail || typeof detail!=='object') return null;
  if ('reason' in detail && typeof detail.reason==='string') return <span>{detail.reason}</span>;
  if (source==='cloudwatch-logs'&&'eventCount' in detail&&typeof detail.eventCount==='number') return <p>{detail.eventCount} log events sampled in the requested 24-hour window{('partial' in detail&&detail.partial)?' · partial sample':''}.</p>;
- if (source==='cost' && 'days' in detail && Array.isArray(detail.days)) return <section aria-label="Tagged AWS cost">
-  <p>Daily unblended cost for the configured billing tag.</p>
+ if (source==='cost' && 'days' in detail && Array.isArray(detail.days)) return <section aria-label="AWS cost evidence">
+  <p>{'scope' in detail&&detail.scope==='linked-account-cost'?'Daily unblended cost for the linked AWS account, covering all its resources.':'Daily unblended cost for the configured billing tag.'}</p>
   {detail.days.length>0&&<ul>{detail.days.map((day,index)=><li key={index}>{day.date} · {day.amount} {day.currency}{day.estimated?' · estimated':''}</li>)}</ul>}
  </section>;
  if (source==='dr' && 'recoveryPoints' in detail && Array.isArray(detail.recoveryPoints)) return <section aria-label="AWS Backup inventory">

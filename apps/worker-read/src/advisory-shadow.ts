@@ -29,7 +29,7 @@ export class AdvisoryShadow {
       FOR UPDATE SKIP LOCKED`, [id])).rows[0];
     if (!run) return;
     const evidence = (await client.query<RecommendationEvidence>(
-     'SELECT source,outcome,provenance,severity,attempt_id FROM investigation_evidence WHERE workspace_id=$1 AND run_id=$2',
+     "SELECT source,outcome,provenance,severity,attempt_id FROM investigation_evidence WHERE workspace_id=$1 AND run_id=$2 AND detail->>'displayStatus' IS DISTINCT FROM 'Not applicable'",
      [id,run.id],
     )).rows;
     await client.query("UPDATE investigation_runs SET advisory_model_result=jsonb_build_object('status','claimed','claimedAt',now(),'provider',$3::text) WHERE workspace_id=$1 AND id=$2", [id,run.id,hosted?(keys.gemini?'gemini':'nvidia'):'ollama']);

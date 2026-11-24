@@ -10,3 +10,9 @@ it('allows explicitly mapped regional resources and rejects ECS, other accounts 
  expect(isRegionalBackupResource(arn.replace('123456789012','999999999999'),target)).toBe(false);
  expect(isRegionalBackupResource('arn:aws:ecs:ap-southeast-2:123456789012:service/cluster/storefront',target)).toBe(false);
 });
+
+it('scopes untagged costs to the one linked account', async () => {
+ const { linkedAccountCostFilter } = await import('./aws-context');
+ expect(linkedAccountCostFilter('110144245794')).toEqual({Dimensions:{Key:'LINKED_ACCOUNT',Values:['110144245794']}});
+ expect(() => linkedAccountCostFilter('')).toThrow();
+});

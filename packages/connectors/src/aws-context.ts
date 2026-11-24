@@ -22,24 +22,36 @@ export function isRegionalBackupResource(arn:string, target:Pick<Target,'account
  return patterns[match[1]].test(match[4]);
 }
 
-export async function readTaggedCost(target:Target,key:string,value:string,now:Date) {
+export function linkedAccountCostFilter(accountId:string) {
+ if(!/^\d{12}$/.test(accountId)||accountId==='000000000000')throw new Error('An approved linked account is required');
+ return {Dimensions:{Key:'LINKED_ACCOUNT' as const,Values:[accountId]}};
+}
+
+export function readTaggedCost(target:Target,key:string,value:string,now:Date) {
+ return readCost(target,now,{key,value});
+}
+
+export function readLinkedAccountCost(target:Target,now:Date) {
+ return readCost(target,now);
+}
+
+async function readCost(target:Target,now:Date,tag?:{key:string;value:string}) {
+ const accountFilter=linkedAccountCostFilter(target.accountId);
  const end=now.toISOString().slice(0,10);
  const start=new Date(Date.parse(end)-7*86400000).toISOString().slice(0,10);
  const client=new CostExplorerClient({region:'us-east-1',credentials:credentials(target),maxAttempts:2});
  try {
   const response=await client.send(new GetCostAndUsageCommand({
    TimePeriod:{Start:start,End:end},Granularity:'DAILY',Metrics:['UnblendedCost'],
-   Filter:{And:[
-    {Dimensions:{Key:'LINKED_ACCOUNT',Values:[target.accountId]}},
-    {Tags:{Key:key,Values:[value],MatchOptions:['EQUALS','CASE_SENSITIVE']}},
-   ]},
+   Filter:tag?{And:[accountFilter,{Tags:{Key:tag.key,Values:[tag.value],MatchOptions:['EQUALS','CASE_SENSITIVE']}}]}:accountFilter,
   }),{abortSignal:AbortSignal.timeout(12000)});
   const days=(response.ResultsByTime??[]).flatMap(row=>{
    const cost=row.Total?.UnblendedCost;
-   if(!cost?.Amount||!cost.Unit||!Number.isFinite(Number(cost.Amount))||!row.TimePeriod?.Start)return [];
-   return [{date:row.TimePeriod.Start,amount:cost.Amount,currency:cost.Unit,estimated:row.Estimated===true}];
+   const date=row.TimePeriod?.Start;
+   if(!cost?.Amount||!cost.Unit||!Number.isFinite(Number(cost.Amount))||!date||date<start||date>=end)return [];
+   return [{date,amount:cost.Amount,currency:cost.Unit,estimated:row.Estimated===true}];
   });
-  return {scope:'tagged-account-cost',start,end,tagKey:key,tagValue:value,days,partial:!!response.NextPageToken};
+  return {scope:tag?'tagged-account-cost':'linked-account-cost',start,end,...(tag?{tagKey:tag.key,tagValue:tag.value}:{}),days,partial:!!response.NextPageToken||(days.length>0&&new Set(days.map(day=>day.date)).size!==7)};
  }finally{client.destroy();}
 }
 

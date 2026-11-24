@@ -74,7 +74,7 @@ export class InvestigationRepository {
     ON CONFLICT DO NOTHING RETURNING source`,[input.workspaceId,input.runId,input.incidentId,input.serviceId,{reason:'Source activity did not persist an observation before investigation completion.',errorCode:'activity-exhausted'}]);
    for(const row of missing.rows)await this.db.appendAuditInTransaction(client,input.workspaceId,'read-worker','investigation.evidence-collected',{runId:input.runId,incidentId:input.incidentId,source:row.source,outcome:'unavailable',provenance:null});
   }
-  const evidence=(await client.query("SELECT source,outcome,provenance,attempt_id,severity FROM investigation_evidence WHERE workspace_id=$1 AND run_id=$2",[input.workspaceId,input.runId])).rows;
+  const evidence=(await client.query("SELECT source,outcome,provenance,attempt_id,severity FROM investigation_evidence WHERE workspace_id=$1 AND run_id=$2 AND detail->>'displayStatus' IS DISTINCT FROM 'Not applicable'",[input.workspaceId,input.runId])).rows;
   const prom=evidence.find(item=>item.source==='prometheus');
   if(status==='advised'&&!(prom?.provenance==='live'&&['ok','uncovered'].includes(prom.outcome))){
    status='escalated';
