@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Activity, ArrowDownRight, ArrowUpRight, Cloud, Layers, Radio, Terminal } from 'lucide-react';
+import { Activity, ArrowUpRight, Cloud, Layers, Terminal } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { TrafficReplay } from '../../components/traffic-replay';
 import { WorkspaceSetup } from '../../components/workspace-setup';
@@ -18,11 +18,11 @@ export default async function Dashboard() {
   if (configured && !(await currentIdentity())) redirect('/login');
 
   return <div className="product-dashboard ops-dashboard desk-enter">
-    <header className="desk-title">
-      <div><h1>Operations overview</h1><p>Investigate incidents, manage services, and connect evidence sources.</p></div>
-      {configured && <Link className="desk-primary" href="/incidents">Open investigations <ArrowUpRight size={16}/></Link>}
-    </header>
     {configured ? <>
+      <header className="desk-title">
+        <div><h1>Operations overview</h1><p>Investigate incidents, manage services, and connect evidence sources.</p></div>
+        <Link className="desk-primary" href="/incidents">Open investigations <ArrowUpRight size={16}/></Link>
+      </header>
       <nav className="desk-shortcuts" aria-label="Workspace shortcuts">
         {shortcuts.map(({href, title, detail, Icon}) => <Link href={href} key={href}>
           <Icon size={20} aria-hidden="true"/><ArrowUpRight className="desk-arrow" size={16} aria-hidden="true"/>
@@ -30,19 +30,20 @@ export default async function Dashboard() {
         </Link>)}
       </nav>
       <WorkspaceSetup />
-    </> : <div className="desk-onboarding">
-      <section className="desk-setup">
+    </> : <>
+      <div className="signal-deck">
+        <header className="signal-intro">
+          <h1>See the incident<br/>take shape.</h1>
+          <p>Follow a checkout regression from its first latency spike to the evidence behind it.</p>
+          <Link className="signal-launch" href="/demo/showcase">Launch investigation demo <ArrowUpRight size={17}/></Link>
+        </header>
+        <TrafficReplay />
+      </div>
+      <section className="signal-setup">
         <div className="desk-panel-icon"><Terminal size={22} aria-hidden="true"/></div>
-        <h2>Connect your workspace</h2>
-        <p>Configure organization sign-in and a database to register services and start read-only investigations.</p>
-        <Link className="desk-primary" href="/login">Open workspace setup <ArrowUpRight size={16}/></Link>
+        <div><h2>Connect your workspace</h2><p>Sign in with organization SSO to manage services and connect evidence sources like CloudWatch.</p></div>
+        <Link className="desk-primary" href="/login">Workspace setup <ArrowUpRight size={16}/></Link>
       </section>
-      <section className="desk-demo">
-        <Radio size={28} aria-hidden="true"/>
-        <div><h2>Explore a sample incident</h2><p>Follow a simulated investigation from alert to evidence.</p></div>
-        <Link href="/demo/showcase">Launch demo <ArrowDownRight size={16}/></Link>
-      </section>
-    </div>}
-    {!configured && <TrafficReplay />}
+    </>}
   </div>;
 }

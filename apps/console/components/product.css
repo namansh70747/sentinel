@@ -229,3 +229,43 @@
  .traffic-replay[data-playing=true] .traffic-dot { animation: traffic-beacon 1.6s ease-in-out infinite; }
  @keyframes traffic-beacon { 50% { filter: drop-shadow(0 0 7px #a2f8c4); } }
 }
+
+.desk-brand-mark { background: #152d26 url('/icon.svg') center / cover no-repeat; box-shadow: 0 0 0 1px #4e7262; }
+.signal-deck {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: clamp(20px, 4vw, 60px);
+  padding: clamp(22px, 5vw, 72px);
+  border-radius: 22px;
+  color: #effff6;
+  background: radial-gradient(ellipse at 80% 30%, #2a5848, transparent 64%), #10251e;
+}
+.sc-product .signal-intro h1 { color: #f1fff7; margin: 0; font-size: clamp(35px, 5vw, 76px); line-height: .99; letter-spacing: -.075em; }
+.sc-product .signal-intro p { color: #bcd8cb; font-size: 15px; max-width: 35ch; margin: 16px 0 23px; }
+.sc-product .signal-intro .signal-launch { display: inline-flex; align-items: center; gap: 8px; padding: 11px 14px; border-radius: 8px; color: #133528; background: #a6f7cb; font-weight: 700; font-size: 13px; }
+.sc-product .signal-intro .signal-launch:hover { background: #d3ffe6; }
+.sc-product .signal-deck .traffic-replay { margin: 0; min-width: 0; background: #091d17d9; border-color: #73a99272; box-shadow: 0 18px 45px #071b1666; }
+.signal-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 15px;
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid var(--ops-border);
+  border-radius: 14px;
+  background: #fcfefc;
+}
+.signal-setup .desk-panel-icon { margin: 0; flex: 0 0 45px; }
+.signal-setup > div:nth-child(2) { flex: 1 1 210px; }
+.sc-product .signal-setup h2, .sc-product .signal-setup p { margin: 0; }
+@media (max-width: 950px) { .signal-deck { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: no-preference) {
+ .signal-intro { animation: desk-enter .55s .05s both; }
+ .signal-deck .traffic-replay { animation: desk-enter .65s .12s both; }
+ .traffic-line { animation: signal-draw .85s ease-out both; }
+ .traffic-replay[data-playing=true] .traffic-measure strong { animation: signal-value .24s ease-out both; }
+ @keyframes signal-draw { from { stroke-dasharray: 0 1; } to { stroke-dasharray: 1 0; } }
+ @keyframes signal-value { from { opacity: .65; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+}

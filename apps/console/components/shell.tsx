@@ -36,7 +36,7 @@ export function Shell({ children }: { children: ReactNode }) {
 }
 
 function BrandMark() {
- return <span className="desk-brand-mark" aria-hidden="true"><Activity size={20} strokeWidth={2.4}/></span>;
+ return <span className="desk-brand-mark" aria-hidden="true"/>;
 }
 
 function ProductFrame({children}:{children:ReactNode}) {
