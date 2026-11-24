@@ -46,7 +46,7 @@ export async function readEcsMetrics(serviceArn: string, roleArn: string, until:
    const timestamps = result.Timestamps ?? [];
    if (timestamps.length !== values.length || values.some(value => !Number.isFinite(value))) throw new Error('Malformed CloudWatch metric response');
    const points = timestamps.map((timestamp, index) => ({timestamp:timestamp.toISOString(), average:values[index]}));
-   return {metric, points, partial:status === 'PartialData' || Boolean(response.NextToken)};
+   return {metric, unit:'Percent' as const, points, partial:status === 'PartialData' || Boolean(response.NextToken)};
   });
   return {serviceArn, start: start.toISOString(), end: until.toISOString(), metrics};
  } finally {

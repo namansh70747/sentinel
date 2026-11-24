@@ -1,3 +1,8 @@
+import { readFile } from 'node:fs/promises';
+import { ConnectorRepository } from '@sentinel/db/connectors';
+import { InvestigationRepository } from '@sentinel/db/investigations';
+import { CollaborationRepository } from '@sentinel/db/collaboration';
+import { SecretVault } from '@sentinel/connectors/secrets';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { loadEnvFile } from 'node:process';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -7,6 +12,12 @@ import { normalizeGrafanaAlerts } from '@sentinel/connectors';
 loadEnvFile('.local/compose.env');
 const db = new SentinelDatabase('postgres://sentinel_app:' + encodeURIComponent(process.env.SENTINEL_DATABASE_PASSWORD!) + '@127.0.0.1:55441/sentinel');
 const workspace = randomUUID();
+const connectors=new ConnectorRepository(db,await SecretVault.fromFile('.local/connector-key'));
+const runs=new InvestigationRepository(db);
+const collaboration=new CollaborationRepository(db);
+const actor=JSON.parse(await readFile('.local/owner.json','utf8'));
+const identity=(await db.pool.query('SELECT id FROM identities WHERE issuer=$1 AND subject=$2',[actor.issuer,actor.subject])).rows[0];
+if(!identity)throw Error('Local acceptance operator unavailable');
 const prefix = 'accept-' + workspace.slice(0, 8);
 const base = 'http://127.0.0.1:3024';
 const headers: Record<string,string> = {
@@ -43,7 +54,7 @@ async function request(port:number, fail:boolean) {
 }
 async function tempoSample(service:typeof services[number], traceId:string, start:number) {
  const window = {start:String(Math.floor(start/1000)-5),end:String(Math.ceil(Date.now()/1000)+5)};
- const search = new URLSearchParams({...window,q:`{resource.service.name="${service.traceService}"}`,limit:'5'});
+ const search = new URLSearchParams({...window,q:`{resource.service.name="${service.traceService}"}`,limit:'100'});
  const lookup = new URLSearchParams(window);
  return poll('Tempo trace availability',async()=>{
   const begin=performance.now();
@@ -58,7 +69,7 @@ async function tempoSample(service:typeof services[number], traceId:string, star
   const data=await found.json();
   const searchMs=Math.round(performance.now()-searchStart);
   if(!data.traces?.length)return;
-  return {service:service.name,traceId,traceLookupMs,searchMs,searchReturnedTarget:data.traces.some((row:{traceID:string})=>row.traceID===traceId)};
+  return {service:service.name,traceId,traceLookupMs,traceLookupVerified:true,searchMs,searchReturnedTarget:data.traces.some((row:{traceID:string})=>row.traceID===traceId)};
  },45000);
 }
 try {
@@ -78,6 +89,8 @@ try {
  const folder=await grafana('/api/folders','POST',{title:prefix});
  const template={...original,orgID:1,folderUID:folder.uid};
  await db.pool.query('INSERT INTO workspaces(id,name) VALUES($1,$2)',[workspace,prefix]);
+ await db.inWorkspace(workspace,c=>c.query("INSERT INTO workspace_memberships(workspace_id,identity_id,role) VALUES($1,$2,'admin')",[workspace,identity.id]));
+ const prometheus=await connectors.create(workspace,identity.id,{provider:'prometheus',name:'Acceptance metrics',mode:'live',config:{endpoint:'http://prometheus:9090'}},{});
  const selection=process.argv[2];
  if(selection&&!services.some(s=>s.name===selection))throw Error('Choose checkout or payments');
  for(const service of services.filter(s=>!selection||s.name===selection)){
@@ -86,6 +99,18 @@ try {
    await c.query("INSERT INTO services(workspace_id,id,name,owner,account_id,region,resource_arn) VALUES($1,$2,$3,'local acceptance','000000000000','local','fixture')",[workspace,id,service.name]);
    await c.query('INSERT INTO webhook_endpoints(id,workspace_id,service_id,secret_hash) VALUES($1,$2,$3,$4)',[endpoint,workspace,id,createHash('sha256').update(secret).digest('hex')]);
   });
+  const selector=`{job="${service.job}"}`;
+  const metrics={
+   goodQuery:`sum(increase(workload_requests_good${selector}[{window}]))`,
+   totalQuery:`sum(increase(workload_requests_total${selector}[{window}]))`,
+   latencyQuery:`1000 * histogram_quantile(0.99, sum by (le) (rate(workload_request_duration_seconds_bucket${selector}[10m])))`,
+   goodCoverageQuery:`workload_requests_good${selector}[6h]`,
+   totalCoverageQuery:`workload_requests_total${selector}[6h]`,
+   latencyCoverageQuery:`workload_request_duration_seconds_count${selector}[6h]`,
+   scrapeIntervalSeconds:15,
+  };
+  await connectors.bind(workspace,identity.id,id,'prometheus',prometheus.id,prometheus.configVersion,metrics);
+  await db.inWorkspace(workspace,c=>c.query('INSERT INTO service_slos(workspace_id,service_id,availability_target,latency_target_ms,good_query,total_query,latency_query) VALUES($1,$2,.99,500,$3,$4,$5)',[workspace,id,metrics.goodQuery,metrics.totalQuery,metrics.latencyQuery]));
   const name=prefix+'-'+service.name;
   const contact={uid:name,name,type:'webhook',disableResolveMessage:false,settings:{url:'http://console:3010/api/webhooks/grafana/'+endpoint,httpMethod:'POST',headers:{'x-sentinel-secret':secret}}};
   await grafana(api+'/contact-points','POST',contact);
@@ -95,7 +120,7 @@ try {
   for(let cycle=1;cycle<=2;cycle++){
    const uid=name+'-'+cycle;
    const {id:_id,updated:_updated,provenance:_provenance,...rule}=structuredClone(template);
-   Object.assign(rule,{uid,title:uid,ruleGroup:uid,for:'0s',noDataState:'OK',execErrState:'OK',labels:{service:service.name,acceptance:prefix},notification_settings:{receiver:name,group_by:['alertname'],group_wait:'1s',group_interval:'15s',repeat_interval:'4h'}});
+   Object.assign(rule,{uid,title:uid,isPaused:false,ruleGroup:uid,for:'0s',noDataState:'OK',execErrState:'OK',labels:{service:service.name,acceptance:prefix},notification_settings:{receiver:name,group_by:['alertname'],group_wait:'1s',group_interval:'15s',repeat_interval:'4h'}});
    rule.data[0].model.expr=`sum(increase(workload_requests_total{job="${service.job}"}[45s]) - increase(workload_requests_good{job="${service.job}"}[45s]))`;
    rule.data[1].model.expression='$A > 0';
    await grafana(api+'/alert-rules','POST',rule);
@@ -143,7 +168,23 @@ try {
     const leaked=await db.inWorkspace(scope.id,async c=>(await c.query('SELECT 1 FROM incidents WHERE workspace_id=$1 AND title=$2 LIMIT 1',[scope.id,uid])).rowCount);
     if(leaked)throw Error('Alert appeared outside its acceptance workspace');
    }
-   console.log(JSON.stringify({routeIsolated:true,service:service.name,cycle,incident,investigation,resolution,loki,replayQueued:0,tempo:sample}));
+   const state=await db.inWorkspace(workspace,async c=>(await c.query('SELECT state_version FROM incidents WHERE id=$1',[incident])).rows[0]);
+   const verifying=await collaboration.transition(workspace,identity.id,incident,'verifying','Alert resolved; checking service recovery',Number(state.state_version));
+   if(verifying.error)throw Error('Could not enter recovery verification: '+verifying.error);
+   const recovery=await poll('Sentinel recovered '+uid,async()=>{
+    for(let i=0;i<10;i++)await request(service.port,false);
+    await delay(16000);
+    const run=await runs.create(workspace,incident,identity.id);
+    const detail=await poll('Fresh recovery evidence '+uid,async()=>{
+     const value=await runs.get(workspace,run.id);
+     return value?.finished_at?value:undefined;
+    },60000);
+    const result=await collaboration.transition(workspace,identity.id,incident,'recovered','Fresh observations meet service targets',verifying.stateVersion!);
+    if(result.error==='unrecovered')return;
+    if(result.error)throw Error('Recovery transition failed: '+result.error);
+    return {run:run.id,source:detail.evidence.find(e=>e.source==='prometheus')?.outcome,state:result.state};
+   },420000);
+   console.log(JSON.stringify({routeIsolated:true,service:service.name,cycle,incident,investigation,resolution,recovery,loki,replayQueued:0,tempo:sample}));
    await grafana(api+'/alert-rules/'+uid,'DELETE');
    cleanup.shift();
   }

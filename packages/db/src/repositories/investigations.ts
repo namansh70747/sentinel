@@ -1,10 +1,11 @@
+import { buildIncidentAdvisory } from '@sentinel/connectors/incident-recommendation';
 import { randomUUID } from 'node:crypto';
 import type { SentinelDatabase } from '../index';
 import type { SourceName,SourceOutcome,Provenance } from '@sentinel/contracts';
 import { ConnectorStateError } from './connectors';
 
 export interface RunIdentity {workspaceId:string;incidentId:string;serviceId:string;runId:string}
-export interface InvestigationRun {workspace_id:string;id:string;incident_id:string;service_id:string;status:'queued'|'running'|'advised'|'escalated'|'failed';requested_by:string;summary:string|null;observed_at:Date;created_at:Date;finished_at:Date|null}
+export interface InvestigationRun {workspace_id:string;id:string;incident_id:string;service_id:string;status:'queued'|'running'|'advised'|'escalated'|'failed';requested_by:string;summary:string|null;observed_at:Date;created_at:Date;finished_at:Date|null;advisory:ReturnType<typeof buildIncidentAdvisory>|null;advisory_model_result?:{revision?:import('@sentinel/connectors/incident-recommendation').ModelIncidentAdvisory|null}|null}
 interface Attempt {source:SourceName;id:string;connector_id:string|null;config_version:number|null;mapping:Record<string,string|number>}
 interface Envelope {workspace_id:string;run_id:string;incident_id:string;service_id:string;source:SourceName;attempt_id:string;outcome:SourceOutcome;provenance:Provenance|null;severity:string;detail:unknown;observed_at:Date|null;collected_at:Date;window_covered:boolean|null}
 const sources:SourceName[]=['prometheus','ecs','loki','tempo','github','cloudwatch','cost','dr'];
@@ -39,7 +40,8 @@ export class InvestigationRepository {
   const attempts=(await client.query<Attempt>('SELECT source,id,connector_id,config_version,mapping FROM investigation_source_attempts WHERE workspace_id=$1 AND run_id=$2 ORDER BY source',[workspaceId,id])).rows;
   const evidence=(await client.query<Envelope>('SELECT * FROM investigation_evidence WHERE workspace_id=$1 AND run_id=$2 ORDER BY source',[workspaceId,id])).rows;
   const legacyReferences=(await client.query("SELECT source,observed_at,'legacy' AS verification FROM incident_evidence WHERE workspace_id=$1 AND incident_id=$2",[workspaceId,run.incident_id])).rows;
-  return {...run,attempts,evidence,legacyReferences};
+  const modelResult=run.advisory_model_result;
+  return {...run,advisory:modelResult?.revision??run.advisory,attempts,evidence,legacyReferences};
  });}
  async cached(input:RunIdentity,source:SourceName){return this.db.inWorkspace(input.workspaceId,async client=>(await client.query('SELECT outcome,provenance FROM investigation_evidence WHERE workspace_id=$1 AND run_id=$2 AND incident_id=$3 AND service_id=$4 AND source=$5',[input.workspaceId,input.runId,input.incidentId,input.serviceId,source])).rows[0] as {outcome:SourceOutcome;provenance:Provenance|null}|undefined);}
  async persist(input:RunIdentity,source:SourceName,outcome:SourceOutcome,provenance:Provenance|null,detail:unknown,extras:{severity?:string;observedAt?:string|null;windowCovered?:boolean|null}={}){
@@ -62,7 +64,7 @@ export class InvestigationRepository {
   const run=(await client.query('SELECT status FROM investigation_runs WHERE workspace_id=$1 AND id=$2 AND incident_id=$3 AND service_id=$4 FOR UPDATE',[input.workspaceId,input.runId,input.incidentId,input.serviceId])).rows[0];
   if(!run)throw new ConnectorStateError('not-found','Investigation not found');
   if(!['queued','running'].includes(run.status))return;
-  if(['queued','running'].includes(run.status)){
+  {
    // A timed-out activity may never return its result. Close every persisted
    // attempt before closing the run; late activity writes cannot replace these.
    const missing=await client.query(`INSERT INTO investigation_evidence(workspace_id,run_id,incident_id,service_id,source,attempt_id,outcome,provenance,severity,detail)
@@ -70,10 +72,15 @@ export class InvestigationRepository {
     WHERE a.workspace_id=$1 AND a.run_id=$2 AND NOT EXISTS(SELECT 1 FROM investigation_evidence e WHERE e.workspace_id=a.workspace_id AND e.run_id=a.run_id AND e.source=a.source)
     ON CONFLICT DO NOTHING RETURNING source`,[input.workspaceId,input.runId,input.incidentId,input.serviceId,{reason:'Source activity did not persist an observation before investigation completion.',errorCode:'activity-exhausted'}]);
    for(const row of missing.rows)await this.db.appendAuditInTransaction(client,input.workspaceId,'read-worker','investigation.evidence-collected',{runId:input.runId,incidentId:input.incidentId,source:row.source,outcome:'unavailable',provenance:null});
-   const prom=(await client.query("SELECT outcome FROM investigation_evidence WHERE workspace_id=$1 AND run_id=$2 AND source='prometheus'",[input.workspaceId,input.runId])).rows[0];
-   if(status==='advised'&&!['ok','uncovered'].includes(prom?.outcome)){status='escalated';summary='Required Prometheus evidence is unavailable; investigation escalated.';}
   }
-  const updated=await client.query("UPDATE investigation_runs SET status=$1,summary=$2,finished_at=now() WHERE workspace_id=$3 AND id=$4 AND incident_id=$5 AND service_id=$6 AND status IN ('queued','running') RETURNING id",[status,summary.slice(0,2000),input.workspaceId,input.runId,input.incidentId,input.serviceId]);
+  const evidence=(await client.query("SELECT source,outcome,provenance,attempt_id,severity FROM investigation_evidence WHERE workspace_id=$1 AND run_id=$2",[input.workspaceId,input.runId])).rows;
+  const prom=evidence.find(item=>item.source==='prometheus');
+  if(status==='advised'&&!(prom?.provenance==='live'&&['ok','uncovered'].includes(prom.outcome))){
+   status='escalated';
+   summary='Service health is incomplete because live request-health evidence is unavailable.';
+  }
+  const advisory=buildIncidentAdvisory(status,evidence);
+  const updated=await client.query("UPDATE investigation_runs SET status=$1,summary=$2,finished_at=now(),advisory=$7 WHERE workspace_id=$3 AND id=$4 AND incident_id=$5 AND service_id=$6 AND status IN ('queued','running') RETURNING id",[status,summary.slice(0,2000),input.workspaceId,input.runId,input.incidentId,input.serviceId,advisory]);
   if(updated.rowCount){
    await this.db.appendAuditInTransaction(client,input.workspaceId,'read-worker','investigation.completed',{runId:input.runId,incidentId:input.incidentId,status});
    // This records publishing intent only. The separate communication worker

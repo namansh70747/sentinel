@@ -21,3 +21,32 @@ it('records an unknown result after a lost publish response and never sends it t
  try{expect(await deliverNotification({provider:'ntfy',config:{endpoint,topic:'sentinel-test-topic'},secret:{token:'private-test-token'},message:'Approved test'},new ConnectorHttpClient({allowedPrivateOrigins:[endpoint]}))).toMatchObject({status:'unknown'});expect(writes).toBe(1);}
  finally{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
 });
+
+import assert from 'node:assert/strict';
+
+it('Slack sends a readable incident card with a plain-text fallback', async () => {
+ const http = new ConnectorHttpClient();
+ let payload: Record<string, unknown> = {};
+ http.send = async (_url, options) => {
+  payload = JSON.parse(String(options?.body));
+  return {text: 'ok', status: 200, headers: {}};
+ };
+ const result = await deliverNotification({
+  provider: 'slack',
+  config: {},
+  secret: {webhookUrl: 'https://hooks.slack.com/services/T/B/token'},
+  message: 'Legacy UUID-heavy message',
+  incident: {title: 'Checkout latency increased', service: 'checkout-api', severity: 'sev2', status: 'escalated', evidence: [{source:'ecs',outcome:'ok',provenance:'live'},{source:'cloudwatch',outcome:'ok',provenance:'live'},{source:'cost',outcome:'not-configured',provenance:null},{source:'tempo',outcome:'ok',provenance:'simulated'}]},
+ }, http);
+ assert.equal(result.status, 'sent');
+ assert.match(JSON.stringify(payload.attachments), /#B45309/);
+ assert.match(JSON.stringify(payload.attachments), /What Sentinel verified/);
+ assert.match(String(payload.text), /checkout api.*needs attention/i);
+ assert.match(JSON.stringify(payload.blocks), /Checkout latency increased/);
+ assert.match(JSON.stringify(payload.blocks), /High priority/);
+ assert.match(JSON.stringify(payload.attachments), /AWS service status, CPU and memory metrics/);
+ assert.match(String(payload.text), /Setup needed: AWS costs/);
+ assert.doesNotMatch(String(payload.text), /Live checks passed:.*traces/i);
+ assert.match(JSON.stringify(payload.blocks), /Connect AWS cost reporting/);
+ assert.doesNotMatch(JSON.stringify(payload), /Legacy UUID-heavy message|SEV2/);
+});

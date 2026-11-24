@@ -31,7 +31,8 @@ services:
       TEMPO_URL: http://tempo:3200
       NTFY_URL: http://ntfy:80
       NTFY_TOPIC: ${NTFY_TOPIC:-sentinel-local-alerts}
-      SENTINEL_ECS_MODE: simulated
+      SENTINEL_ECS_MODE: off
+      SENTINEL_ADVISORY_METRICS: 'true'
       SENTINEL_EGRESS_ALLOWLIST: prometheus,loki,tempo,ntfy
       SENTINEL_CONNECTOR_KEY_FILE: /run/secrets/connector_key
     secrets: [connector_key]

@@ -566,3 +566,39 @@ connector snapshot in each fresh investigation. The worker also checks these
 captured values against the current explicit AWS override before calling a
 provider. A worker target change can therefore stop an outstanding run from
 reading the old target.
+
+### Evidence-linked advisories and local AI
+
+The product worker rejects simulated ECS mode. Fresh AWS observations require an
+explicitly approved service binding. Historical simulated observations remain
+available in their original records.
+
+Every completed investigation stores a rules advisory with its policy version,
+action ID and supporting evidence reference. Slack, the incident page and new
+postmortem drafts read that advisory. The model worker defaults to shadow mode. After verification, set
+`SENTINEL_ADVISORY_MODE=live` to expose a validated revision. A model chooses
+an allowed source ID. Sentinel renders the explanation and references from
+stored evidence. The original rules advisory remains stored. Notification
+dispatch uses the advisory available at claim time.
+
+Add `-f compose.ai.yml` after the existing Compose files to run Ollama and the
+read worker on the dedicated model network. Start `ollama` with the overlay,
+wait for its inference health check, then recreate `worker-read` with the same
+files. The model port is not published. The model cache uses the
+`sentinel-models` Docker volume. Default model is `qwen2.5:0.5b`. With an existing loopback-only
+Ollama instance, `SENTINEL_ADVISORY_MODE=live node --import tsx scripts/dev/run-local-advisory.ts`
+is an alternative. Run only one evaluator per local stack.
+
+The **Sentinel advisory reliability** Grafana dashboard shows actual evaluation
+counts and mean duration from the most recent hour of saved model records.
+Per-run evaluation status and duration are available on the incident page.
+No-duration series are absent when no model was attempted.
+
+Bedrock fallback remains off unless an operator explicitly lists approved
+workspace UUIDs in `SENTINEL_BEDROCK_ADVISORY_WORKSPACES` and provides a separate
+`SENTINEL_BEDROCK_ADVISORY_ROLE_ARN`, `BEDROCK_REGION`, and
+`BEDROCK_RANK_MODEL_ID`. It receives source and outcome codes only. The worker
+caps hosted calls at ten per workspace per rolling day and records reported
+token usage and elapsed time. Model choices are restricted to the supplied
+checks. Slack and the console continue to show the rules advisory during
+shadow evaluation.

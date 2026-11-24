@@ -1,3 +1,5 @@
+import { serveAdvisoryMetrics } from './advisory-metrics';
+import { AdvisoryShadow } from './advisory-shadow';
 import { Client,Connection } from "@temporalio/client";
 import { dispatchOne } from "./dispatch";
 import { Worker, NativeConnection } from '@temporalio/worker';
@@ -17,6 +19,9 @@ if(!process.env.SENTINEL_CONNECTOR_KEY_FILE)throw new Error('SENTINEL_CONNECTOR_
 const connectorRepository=new ConnectorRepository(db,await SecretVault.fromFile(process.env.SENTINEL_CONNECTOR_KEY_FILE));
 const connectorTests=new ConnectorTestRunner(db,connectorRepository);
 const githubSync=new GitHubSynchronizer(db,connectorRepository,new GitHubSyncRepository(db));
+const advisoryShadow=new AdvisoryShadow(db);
+const closeMetrics=process.env.SENTINEL_ADVISORY_METRICS==='true'?serveAdvisoryMetrics(db,9466):()=>{};
+let advisoryPoller:ReturnType<typeof setInterval>|undefined;
 let connection:NativeConnection|undefined,clientConnection:Connection|undefined;
 let poller:ReturnType<typeof setInterval>|undefined,testPoller:ReturnType<typeof setInterval>|undefined,githubPoller:ReturnType<typeof setInterval>|undefined;
 try {
@@ -29,5 +34,7 @@ try {
  poller=setInterval(async()=>{if(running)return;running=true;try{await dispatchOne(db,client);await runDispatcher.tick();}catch{console.error('Investigation dispatch failed');}finally{running=false;}},1000);
  testPoller=setInterval(async()=>{if(testing)return;testing=true;try{await connectorTests.tick();}catch{console.error('Connector test processing failed; check local key and database availability');}finally{testing=false;}},2000);
  let syncing=false;githubPoller=setInterval(async()=>{if(syncing)return;syncing=true;try{await githubSync.tick();}catch{console.error('GitHub synchronization failed; no global credential fallback was attempted.');}finally{syncing=false;}},1000);
+ let evaluating=false;
+ advisoryPoller=setInterval(async()=>{if(evaluating)return;evaluating=true;try{await advisoryShadow.tick();}catch{console.error('Advisory shadow processing failed');}finally{evaluating=false;}},2000);
  await worker.run();
-} finally { clearInterval(poller);clearInterval(testPoller);clearInterval(githubPoller); await clientConnection?.close(); await connection?.close(); await db.close(); }
+} finally { closeMetrics();clearInterval(advisoryPoller);clearInterval(poller);clearInterval(testPoller);clearInterval(githubPoller); await clientConnection?.close(); await connection?.close(); await db.close(); }

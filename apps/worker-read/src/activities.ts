@@ -1,8 +1,7 @@
 import { isRegionalBackupResource, readRecoveryPoints, readTaggedCost } from '@sentinel/connectors/aws-context';
 import { readEcsMetrics } from '@sentinel/connectors/cloudwatch-ecs';
-import { EcsReadClient, LokiClient, MOCK_SERVICE_ARN, MockEcsReadClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, simulateCloudWatch, simulateCost, simulateDr, SloReadError } from '@sentinel/connectors';
+import { EcsReadClient, LokiClient, PrometheusClient, TempoClient, assessCoverage, collectSlo, publishNtfy, SloReadError } from '@sentinel/connectors';
 import type { Provenance, SourceName, SourceOutcome, SourceResult } from '@sentinel/contracts';
-import { correlateEcsChange } from '@sentinel/engine';
 import { qualifiedSeverity } from '@sentinel/policy';
 import type { InvestigationInput, InvestigationResult } from '@sentinel/workflows';
 import { SentinelDatabase } from '@sentinel/db';
@@ -13,8 +12,8 @@ import { InvestigationRepository,type RunIdentity } from '@sentinel/db/investiga
 import { GitHubSyncRepository } from '@sentinel/db/github-sync';
 import { KubernetesReader } from '@sentinel/connectors/kubernetes';
 
-export function readEcsMode(value = process.env.SENTINEL_ECS_MODE): 'off' | 'simulated' | 'live' {
- if (value !== 'off' && value !== 'simulated' && value !== 'live') throw new Error('SENTINEL_ECS_MODE must be off, simulated, or live');
+export function readEcsMode(value = process.env.SENTINEL_ECS_MODE): 'off' | 'live' {
+ if (value !== 'off' && value !== 'live') throw new Error('SENTINEL_ECS_MODE must be off or live');
  if (value === 'live' && !process.env.SENTINEL_READ_ROLE_ARN) throw new Error('live ECS mode requires SENTINEL_READ_ROLE_ARN');
  return value;
 }
@@ -158,39 +157,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
     }
    }
 
-   let mode: 'off' | 'simulated' | 'live';
-   try { mode = readEcsMode(); }
-   catch (error) {
-    const summary = error instanceof Error ? error.message : 'ECS mode is invalid';
-    await write(input, 'ecs', 'unavailable', null, { reason: summary });
-    return result('ecs', 'unavailable', null, summary);
-   }
-   const service = await db.inWorkspace(input.workspaceId, async client => (await client.query('SELECT resource_arn, account_id, region, created_at FROM services WHERE workspace_id=$1 AND id=$2', [input.workspaceId, input.serviceId])).rows[0]);
-   const opened = await db.inWorkspace(input.workspaceId, async client => (await client.query('SELECT created_at FROM incidents WHERE workspace_id=$1 AND id=$2', [input.workspaceId, input.incidentId])).rows[0]);
-   if (mode === 'off') {
-    await write(input, 'ecs', 'not-configured', null, { reason: 'ECS mode is off.' });
-    return result('ecs', 'not-configured', null, 'ECS mode is off.');
-   }
-   try {
-    const observation = mode === 'simulated'
-     ? await new MockEcsReadClient().observe(service?.resource_arn ?? MOCK_SERVICE_ARN)
-     : await new EcsReadClient({ region: service.region, accountId: service.account_id, readRoleArn: process.env.SENTINEL_READ_ROLE_ARN! }).observe(service.resource_arn);
-    const provenance: Provenance = mode === 'simulated' ? 'simulated' : 'live';
-    await write(input, 'ecs', 'ok', provenance, observation, { observedAt: observation.observedAt });
-    if (service&&!input.runId) {
-     await db.inWorkspace(input.workspaceId, async client => {
-      await client.query('INSERT INTO ecs_evidence(workspace_id,incident_id,service_id,observation,provenance) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING', [input.workspaceId, input.incidentId, input.serviceId, observation, provenance]);
-      const prom = (await client.query("SELECT severity FROM incident_evidence WHERE workspace_id=$1 AND incident_id=$2 AND source='prometheus'", [input.workspaceId, input.incidentId])).rows[0];
-      const hypothesis = correlateEcsChange({ ...observation, provenance }, prom?.severity ?? 'sev4', Date.now(), opened?.created_at?.toISOString?.() ?? new Date().toISOString());
-      await client.query('INSERT INTO change_hypotheses(workspace_id,incident_id,service_id,hypothesis) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [input.workspaceId, input.incidentId, input.serviceId, hypothesis]);
-     });
-    }
-    return result('ecs', 'ok', provenance, provenance === 'simulated' ? 'Simulated ECS observation is a lead, not a cause.' : 'Live ECS observation recorded.');
-   } catch (error) {
-    const summary = error instanceof Error ? error.message : 'ECS read failed';
-    await write(input, 'ecs', 'unavailable', mode === 'simulated' ? 'simulated' : 'live', { reason: summary });
-    return result('ecs', 'unavailable', mode === 'simulated' ? 'simulated' : 'live', summary);
-   }
+   return missingAws(input,'ecs');
   },
   async collectLoki(input: InvestigationInput): Promise<SourceResult> {
    if(connections)return boundCollect(input,'loki');
@@ -248,8 +215,10 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
     try{
      const observation=await readEcsMetrics(target.serviceArn,target.readRoleArn,target.binding.observedAt??new Date());
      const populated=observation.metrics.filter(metric=>metric.points.length);
-     const outcome=observation.metrics.some(metric=>metric.partial)?'uncovered':populated.length===2?'ok':populated.length?'uncovered':'empty';
      const timestamps=populated.flatMap(metric=>metric.points.map(point=>point.timestamp)).sort();
+     const end=Date.parse(observation.end);
+     const stale=populated.some(metric=>end-Math.max(...metric.points.map(point=>Date.parse(point.timestamp)))>15*60_000);
+     const outcome=observation.metrics.some(metric=>metric.partial)?'uncovered':stale?'stale':populated.length===2?'ok':populated.length?'uncovered':'empty';
      await write(input,'cloudwatch',outcome,'live',{...observation,configVersion:target.binding.configVersion},{observedAt:timestamps.at(-1)??null});
      return result('cloudwatch',outcome,'live','CloudWatch metric read completed.');
     }catch(error){
@@ -259,9 +228,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
     }
    }
 
-   const detail = simulateCloudWatch('000000000000');
-   await write(input, 'cloudwatch', 'ok', 'simulated', detail);
-   return result('cloudwatch', 'ok', 'simulated', 'Simulated CloudWatch is not a measurement.');
+   return missingAws(input,'cloudwatch');
   },
   async collectCost(input: InvestigationInput): Promise<SourceResult> {
    const prior=await cached(input,'cost');if(prior)return prior;
@@ -279,9 +246,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
      return result('cost',outcome,'live','Cost Explorer read failed.');
     }
    }
-   const detail = simulateCost('000000000000');
-   await write(input, 'cost', 'ok', 'simulated', detail);
-   return result('cost', 'ok', 'simulated', 'Simulated cost is not a bill.');
+   return missingAws(input,'cost');
   },
   async collectDr(input: InvestigationInput): Promise<SourceResult> {
    const prior=await cached(input,'dr');if(prior)return prior;
@@ -304,9 +269,7 @@ export function createActivities(db: SentinelDatabase, connections?:ConnectorRep
      return result('dr',outcome,'live','AWS Backup read failed.');
     }
    }
-   const detail = simulateDr('000000000000');
-   await write(input, 'dr', 'ok', 'simulated', detail);
-   return result('dr', 'ok', 'simulated', 'Restore was not attempted.');
+   return missingAws(input,'dr');
   },
   async recordInvestigation(input: InvestigationInput, outcome: InvestigationResult) {
    if(input.runId){await runs.finish(input as RunIdentity,outcome.status,outcome.summary);return;}

@@ -29,6 +29,7 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)('refreshable investigations',()=
   const saved=await repository.get(workspace,first.id);expect(saved?.evidence).toHaveLength(1);expect(saved?.evidence[0].detail).toEqual({lines:['first']});
   await repository.finish(input,'advised','New evidence');
   const closed=await repository.get(workspace,first.id);expect(closed?.evidence).toHaveLength(8);expect(closed?.status).toBe('escalated');
+  expect(closed?.advisory).toMatchObject({mode:'rules',policyVersion:1,evidenceRefs:[closed?.evidence.find(row=>row.source==='prometheus')?.attempt_id]});
   expect(await repository.persist(input,'prometheus','ok','live',{late:true})).toBe(false);
   expect((await repository.get(workspace,first.id))?.evidence.find(row=>row.source==='prometheus')?.outcome).toBe('unavailable');
   expect((await db.inWorkspace(workspace,async c=>(await c.query('SELECT state,severity FROM incidents WHERE id=$1',[incident])).rows[0]))).toEqual({state:'recovered',severity:'sev3'});

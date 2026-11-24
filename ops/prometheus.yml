@@ -1,6 +1,9 @@
 global:
   scrape_interval: 15s
 scrape_configs:
+  - job_name: sentinel-advisory
+    static_configs:
+      - targets: ['worker-read:9466']
   - job_name: workload
     static_configs:
       - targets: ['workload:9464']

@@ -22,7 +22,12 @@ export async function POST(request: Request, context: { params: Promise<{ worksp
   if (!incident) return null;
   const evidence = (await client.query("SELECT attempt_id::text AS id,source,outcome,provenance,COALESCE(detail->>'summary',source) AS summary FROM investigation_evidence WHERE workspace_id=$1 AND incident_id=$2", [workspaceId, incidentId])).rows as DraftEvidence[];
   const notes = (await client.query('SELECT body FROM incident_notes WHERE workspace_id=$1 AND incident_id=$2 ORDER BY created_at', [workspaceId, incidentId])).rows.map(row => String(row.body));
-  const sections = draftPostmortem(evidence, notes);
+  const advisory = (await client.query(
+   "SELECT coalesce(nullif(advisory_model_result->'revision','null'::jsonb),advisory) AS advisory FROM investigation_runs WHERE workspace_id=$1 AND incident_id=$2 AND advisory IS NOT NULL ORDER BY finished_at DESC,id DESC LIMIT 1",
+   [workspaceId, incidentId],
+  )).rows[0]?.advisory;
+  const sections = draftPostmortem(evidence.filter(row => row.provenance !== 'simulated'), notes);
+  if (advisory?.nextStep) sections.push({kind:'action',body:advisory.nextStep,evidenceId:advisory.evidenceRefs?.[0] ?? null});
   assertPostmortem(sections);
   const version = Number((await client.query('SELECT COALESCE(MAX(version),0)+1 AS version FROM postmortems WHERE workspace_id=$1 AND incident_id=$2', [workspaceId, incidentId])).rows[0].version);
   await client.query('INSERT INTO postmortems(workspace_id,incident_id,version,created_by) VALUES($1,$2,$3,$4)', [workspaceId, incidentId, version, access.identity.id]);

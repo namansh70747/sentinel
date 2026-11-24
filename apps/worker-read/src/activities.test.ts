@@ -32,7 +32,7 @@ describe.skipIf(!url)('read-worker persistence', () => {
   vi.stubEnv('PROMETHEUS_URL','http://127.0.0.1:9090');
   vi.stubEnv('SENTINEL_EGRESS_ALLOWLIST','127.0.0.1');
   vi.stubEnv('SENTINEL_CONFIG_WORKSPACE_ID',current.workspaceId);
-  vi.stubEnv('SENTINEL_ECS_MODE','simulated');
+  vi.stubEnv('SENTINEL_ECS_MODE','off');
   const fetcher=vi.fn(async(url:URL)=>new Response(JSON.stringify({status:'success',data:{resultType:'vector',result:[{metric:{},value:[Date.now()/1000,url.searchParams.get('query')?.startsWith('good')?'980':url.searchParams.get('query')?.startsWith('total')?'1000':'20']}]}})));
   vi.stubGlobal('fetch',fetcher);
   try {
@@ -43,11 +43,11 @@ describe.skipIf(!url)('read-worker persistence', () => {
    await activities.collectEcs(current);
    const evidence=await db.inWorkspace(current.workspaceId,async client=>(await client.query('SELECT source,severity,provenance,window_covered FROM incident_evidence WHERE incident_id=$1 ORDER BY source',[current.incidentId])).rows);
    expect(evidence).toEqual([
-    {source:'ecs',severity:'sev4',provenance:'simulated',window_covered:null},
+    {source:'ecs',severity:'sev4',provenance:null,window_covered:null},
     {source:'prometheus',severity:'sev4',provenance:'live',window_covered:false},
    ]);
-   const hypothesis=await db.inWorkspace(current.workspaceId,async client=>(await client.query('SELECT hypothesis FROM change_hypotheses WHERE incident_id=$1',[current.incidentId])).rows[0].hypothesis);
-   expect(hypothesis.status).not.toBe('candidate');
+   const hypothesis=await db.inWorkspace(current.workspaceId,async client=>(await client.query('SELECT hypothesis FROM change_hypotheses WHERE incident_id=$1',[current.incidentId] )).rows[0]?.hypothesis);
+   expect(hypothesis).toBeUndefined();
    await activities.recordInvestigation(current,{status:'advised',summary:first.summary});
    const incident=await db.inWorkspace(current.workspaceId,async client=>(await client.query('SELECT state,severity FROM incidents WHERE id=$1',[current.incidentId])).rows[0]);
    expect(incident).toEqual({state:'advised',severity:'sev4'});

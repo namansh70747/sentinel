@@ -1,0 +1,42 @@
+# Optional overlay for the local model. No model port is published.
+services:
+  ollama:
+    image: ollama/ollama:0.13.5
+    networks: [model]
+    volumes: [sentinel-models:/root/.ollama]
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b}
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_QUEUE: "4"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        rm -f /tmp/model-ready
+        ollama serve &
+        pid=$$!
+        trap 'kill "$$pid"' EXIT
+        until ollama list >/dev/null 2>&1; do kill -0 "$$pid"; sleep 1; done
+        ollama pull "$$OLLAMA_MODEL"
+        ollama run "$$OLLAMA_MODEL" 'Answer with only OK' >/dev/null
+        touch /tmp/model-ready
+        wait "$$pid"
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/model-ready && ollama list >/dev/null"]
+      interval: 15s
+      timeout: 4s
+      retries: 4
+      start_period: 5m
+  worker-read:
+    networks: [model]
+    environment:
+      SENTINEL_ADVISORY_MODE: ${SENTINEL_ADVISORY_MODE:-shadow}
+      SENTINEL_RECOMMENDATION_OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b}
+      SENTINEL_BEDROCK_ADVISORY_WORKSPACES: ${SENTINEL_BEDROCK_ADVISORY_WORKSPACES:-}
+      SENTINEL_BEDROCK_ADVISORY_ROLE_ARN: ${SENTINEL_BEDROCK_ADVISORY_ROLE_ARN:-}
+      BEDROCK_REGION: ${BEDROCK_REGION:-}
+      BEDROCK_RANK_MODEL_ID: ${BEDROCK_RANK_MODEL_ID:-}
+networks:
+  model: {}
+volumes:
+  sentinel-models: {}

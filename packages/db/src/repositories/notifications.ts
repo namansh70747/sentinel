@@ -43,9 +43,20 @@ export class NotificationRepository {
   let secret:Record<string,string>={};let invalid=!connection?.enabled||connection.mode!=='live'||connection.current_version!==connection.config_version;
   if(!invalid){try{const subscription=(await client.query('SELECT connector_id FROM notification_subscriptions WHERE workspace_id=$1 AND id=$2',[workspaceId,delivery.subscription_id])).rows[0];secret=connection.secret_envelope?this.vault.open(workspaceId,subscription.connector_id,connection.secret_envelope):{};}catch{invalid=true;}}
   if(invalid){await client.query("UPDATE notification_deliveries SET status='failed',error_code='destination-approval-invalid',finished_at=now() WHERE workspace_id=$1 AND id=$2",[workspaceId,delivery.id]);await this.db.appendAuditInTransaction(client,workspaceId,'communication-worker','notification.failed',{deliveryId:delivery.id,errorCode:'destination-approval-invalid'});return null;}
+  const runId=/^investigation:([a-f0-9-]{36})$/i.exec(delivery.event_key)?.[1];
+  const incident=connection.provider==='slack'&&runId
+   ? (await client.query(`SELECT i.title, i.severity, s.name AS service, r.status, coalesce(nullif(r.advisory_model_result->'revision','null'::jsonb),r.advisory) AS advisory,
+       (SELECT coalesce(json_agg(json_build_object('source',e.source,'outcome',e.outcome,'provenance',e.provenance)), '[]'::json)
+        FROM investigation_evidence e WHERE e.workspace_id=r.workspace_id AND e.run_id=r.id) AS evidence
+      FROM investigation_runs r
+      JOIN incidents i ON i.workspace_id=r.workspace_id AND i.id=r.incident_id
+      JOIN services s ON s.workspace_id=r.workspace_id AND s.id=r.service_id
+      JOIN notification_subscriptions n ON n.workspace_id=r.workspace_id AND n.service_id=r.service_id
+      WHERE r.workspace_id=$1 AND r.id=$2 AND n.id=$3`,[workspaceId,runId,delivery.subscription_id])).rows[0]
+   : undefined;
   const attemptId=randomUUID();await client.query("UPDATE notification_deliveries SET status='sending',started_at=now(),attempt_id=$1 WHERE workspace_id=$2 AND id=$3",[attemptId,workspaceId,delivery.id]);
   await client.query("INSERT INTO notification_attempts(workspace_id,delivery_id,id,status) VALUES($1,$2,$3,'started')",[workspaceId,delivery.id,attemptId]);
-  return {workspaceId,deliveryId:delivery.id,attemptId,message:delivery.message as string,provider:connection.provider as 'ntfy'|'slack',config:connection.config as Record<string,string>,secret};
+  return {workspaceId,deliveryId:delivery.id,attemptId,message:delivery.message as string,incident,testDelivery:delivery.event_key.startsWith('test:'),provider:connection.provider as 'ntfy'|'slack',config:connection.config as Record<string,string>,secret};
  });}
  async finish(workspaceId:string,deliveryId:string,attemptId:string,result:{status:DeliveryStatus;errorCode?:string;messageId?:string}){return this.db.inWorkspace(workspaceId,async client=>{
   const updated=await client.query("UPDATE notification_deliveries SET status=$1,error_code=$2,provider_message_id=$3,finished_at=now() WHERE workspace_id=$4 AND id=$5 AND attempt_id=$6 AND status='sending' RETURNING id",[result.status,result.errorCode??null,result.messageId??null,workspaceId,deliveryId,attemptId]);

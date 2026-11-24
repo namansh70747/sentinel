@@ -71,6 +71,7 @@ services:
       SENTINEL_GRAFANA_WEBHOOK_BASE_URL: ${SENTINEL_GRAFANA_WEBHOOK_BASE_URL:-http://host.docker.internal:3010}
     volumes:
       - "./ops/grafana/provisioning:/etc/grafana/provisioning:ro"
+      - "./ops/grafana/dashboards:/etc/grafana/sentinel-dashboards:ro"
       - "grafana-data:/var/lib/grafana"
     ports: ["127.0.0.1:3012:3000"]
     networks: [observe]
