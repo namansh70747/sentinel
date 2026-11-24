@@ -1,15 +1,13 @@
 'use client';
 
 import {
-  Activity, Check, ChevronRight, Circle, Clock3, FileCheck2, GitBranch,
-  Loader2, LockKeyhole, Network, Server, ShieldCheck, Terminal, TriangleAlert,
+  Activity, Check, ChevronRight, Clock3, FileCheck2, GitBranch,
+  LockKeyhole, Network, Server, ShieldCheck, Terminal,
   type LucideIcon,
 } from 'lucide-react';
 import { useId, type KeyboardEvent, type ReactNode } from 'react';
 import type { Run } from '../../showcase/model';
-import { ShowcaseReplay } from './showcase-replay';
-
-export const investigationStages = ['Receive alert', 'Create incident', 'Collect metrics', 'Read ECS context', 'Record evidence'];
+import { ShowcaseReplay, type ShowcasePlayback } from './showcase-replay';
 const evidenceTabs = ['Evidence', 'Timeline', 'Raw data'] as const;
 export type EvidenceTab = (typeof evidenceTabs)[number];
 
@@ -29,40 +27,10 @@ export const formatTime = (date: string) => new Date(date).toLocaleTimeString('e
 export const resultLabels = { complete: 'Complete', partial: 'Partial', 'needs-data': 'Needs data' };
 type Tone = 'good' | 'warning' | 'notice' | 'neutral';
 
-export function InvestigationProgress({ step, run }: { step: number | null; run?: Run }) {
-  return <div className="sc-workflow">
-    <div className="sc-workflow-label">
-      <span>Investigation workflow</span>
-      <div className="sc-workflow-result">
-        <span role="status">
-          {step !== null ? investigationStages[step] + ' · ' + (step + 1) + '/' + investigationStages.length : run ? resultLabels[run.status] : 'Ready'}
-        </span>
-        {step === null && run && <a href="#investigation-evidence">View evidence</a>}
-      </div>
-    </div>
-    <ol>
-      {investigationStages.map((label, index) => {
-        const complete = step !== null ? index < step : Boolean(run);
-        const active = step === index;
-        const warning = complete && (
-          (index === 2 && run?.status === 'needs-data' && step === null) ||
-          (index === 3 && run?.status === 'partial' && step === null)
-        );
-        const state = active ? 'active' : warning ? 'warning' : complete ? 'complete' : 'queued';
-        return <li key={label} data-state={state} aria-current={active ? 'step' : undefined}>
-          <span className="sc-workflow-icon" aria-hidden="true">
-            {active ? <Loader2 size={15} className="sc-spin"/> : warning ? <TriangleAlert size={14}/> : complete ? <Check size={15}/> : <Circle size={11}/>}
-          </span>
-          <span>{label}<span className="sc-sr-only">, {state}</span></span>
-        </li>;
-      })}
-    </ol>
-  </div>;
-}
-
-export function InvestigationOverview({ run, tab, onTabChange, onAudit }: {
+export function InvestigationOverview({ run, tab, playback, onTabChange, onAudit }: {
   run: Run;
   tab: EvidenceTab;
+  playback: ShowcasePlayback;
   onTabChange: (tab: EvidenceTab) => void;
   onAudit: () => void;
 }) {
@@ -88,7 +56,7 @@ export function InvestigationOverview({ run, tab, onTabChange, onAudit }: {
           tone={run.status === 'complete' ? 'good' : 'warning'} Icon={ShieldCheck}/>
       </div>
     </section>
-    <ShowcaseReplay scenario={run.scenario}/>
+    <ShowcaseReplay playback={playback}/>
     <div className="sc-lab-workbench" id="investigation-evidence">
       <EvidencePanel run={run} tab={tab} onTabChange={onTabChange} onAudit={onAudit}/>
       <aside className="sc-lab-context" aria-label="Supporting context">

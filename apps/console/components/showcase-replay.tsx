@@ -2,7 +2,7 @@
 
 import { Pause, Play } from 'lucide-react';
 import { useEffect, useId, useMemo, useState, type PointerEvent } from 'react';
-import { chartValues, type Scenario } from '../../showcase/model';
+import { chartValues, type Run, type Scenario } from '../../showcase/model';
 
 const plot = { width: 560, height: 132, top: 10, bottom: 122 };
 const deploymentSample = 24;
@@ -32,22 +32,31 @@ const signals = {
 
 type Signal = keyof typeof signals;
 
-export function ShowcaseReplay({ scenario }: { scenario: Scenario }) {
+export function useShowcasePlayback(run: Run | undefined, enabled: boolean, investigating: boolean) {
+  const scenario = run?.scenario ?? 'deployment';
+  const runId = run?.id;
   const data = useMemo(() => ({
     availability: chartValues(scenario, 'availability'),
     latency: chartValues(scenario, 'latency'),
   }), [scenario]);
   const last = data.latency.length - 1;
-  const [sample, setSample] = useState(scenario === 'deployment' ? 18 : 0);
+  const firstSample = scenario === 'deployment' ? 18 : 0;
+  const [frame, setFrame] = useState({ runId, sample: firstSample });
   const [playing, setPlaying] = useState(false);
   const [visible, setVisible] = useState(true);
-  const scrubberId = useId();
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const sample = frame.runId === runId ? frame.sample : firstSample;
+  const advancing = enabled && playing && visible && Boolean(runId) && !investigating;
 
   useEffect(() => {
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
     setPlaying(!preference.matches);
-    const handleMotion = () => { if (preference.matches) setPlaying(false); };
+    const handleMotion = () => {
+      setReducedMotion(preference.matches);
+      if (preference.matches) setPlaying(false);
+    };
     const handleVisibility = () => setVisible(!document.hidden);
+    handleMotion();
     handleVisibility();
     preference.addEventListener('change', handleMotion);
     document.addEventListener('visibilitychange', handleVisibility);
@@ -58,15 +67,34 @@ export function ShowcaseReplay({ scenario }: { scenario: Scenario }) {
   }, []);
 
   useEffect(() => {
-    if (!playing || !visible) return;
-    const timer = window.setInterval(() => setSample(current => current === last ? 0 : current + 1), 550);
+    if (!advancing) return;
+    const timer = window.setInterval(() => setFrame(current => {
+      const index = current.runId === runId ? current.sample : firstSample;
+      return { runId, sample: index === last ? 0 : index + 1 };
+    }), 550);
     return () => window.clearInterval(timer);
-  }, [playing, visible, last]);
+  }, [advancing, runId, firstSample, last]);
 
   function seek(index: number) {
     setPlaying(false);
-    setSample(index);
+    setFrame({ runId, sample: index });
   }
+
+  const availability = data.availability[sample];
+  const latency = data.latency[sample];
+  return {
+    scenario, data, sample, last, playing, advancing, seek,
+    motion: enabled && visible && !reducedMotion && playing,
+    reading: { availability, latency, breached: availability < signals.availability.target || latency > signals.latency.target },
+    toggle: () => setPlaying(current => !current),
+  };
+}
+
+export type ShowcasePlayback = ReturnType<typeof useShowcasePlayback>;
+
+export function ShowcaseReplay({ playback }: { playback: ShowcasePlayback }) {
+  const { scenario, data, sample, last, playing, advancing, seek, toggle } = playback;
+  const scrubberId = useId();
 
   function seekFromChart(event: PointerEvent<SVGSVGElement>) {
     if (!event.isPrimary || event.button !== 0) return;
@@ -75,13 +103,13 @@ export function ShowcaseReplay({ scenario }: { scenario: Scenario }) {
     seek(Math.round(position * last));
   }
 
-  return <section className="sc-replay" aria-label="Service signals" data-playing={playing && visible}>
+  return <section className="sc-replay" aria-label="Service signals" data-playing={advancing}>
     <header className="sc-replay-heading">
       <div>
         <h2>Service signals</h2>
         <p>checkout-api · {scenario === 'stale' ? 'observations 25 minutes old' : 'simulated 40-minute window'}</p>
       </div>
-      <button type="button" className="sc-control" onClick={() => setPlaying(current => !current)}>
+      <button type="button" className="sc-control" onClick={toggle}>
         {playing ? <Pause size={15} aria-hidden="true"/> : <Play size={15} aria-hidden="true"/>}
         {playing ? 'Pause replay' : 'Play replay'}
       </button>
@@ -117,9 +145,9 @@ function SignalChart({ kind, values, sample, scenario, onSeek }: {
   const breached = kind === 'availability' ? value < signal.target : value > signal.target;
   const isStale = scenario === 'stale';
 
-  return <section className="sc-signal-chart" data-signal={kind}>
+  return <section className="sc-signal-chart" data-signal={kind} data-breach={breached && !isStale}>
     <header>
-      <div><h3>{signal.label}</h3><strong data-breach={breached && !isStale}>{signal.format(value)}</strong></div>
+      <div><h3>{signal.label}</h3><strong>{signal.format(value)}</strong></div>
       <span className="sc-signal-state" data-tone={isStale ? 'notice' : breached ? 'warning' : 'good'}>
         {isStale ? 'Stale data' : breached ? signal.breach : 'Within objective'}
       </span>

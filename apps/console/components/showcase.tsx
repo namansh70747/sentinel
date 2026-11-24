@@ -10,9 +10,10 @@ import { investigate, report, scenarios, type Run, type Scenario } from '../../s
 import { BrandMark } from './brand-mark';
 import { MockAwsConnector } from './mock-aws-connector';
 import {
-  downloadReport, formatTime, InvestigationOverview, InvestigationProgress,
-  investigationStages, resultLabels, type EvidenceTab,
+  downloadReport, formatTime, InvestigationOverview, resultLabels, type EvidenceTab,
 } from './showcase-investigation';
+import { InvestigationMap, investigationStages } from './showcase-map';
+import { useShowcasePlayback } from './showcase-replay';
 import './showcase.css';
 import './showcase-refresh.css';
 
@@ -67,6 +68,7 @@ export function Showcase({ standalone = false }: { standalone?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const running = step !== null;
   const run = runs.find(record => record.id === selected) ?? runs[0];
+  const playback = useShowcasePlayback(run, view === 'Overview', running);
 
   useEffect(() => {
     const token = ++generation.current;
@@ -231,17 +233,21 @@ export function Showcase({ standalone = false }: { standalone?: boolean }) {
       </header>
       <main id="demo-content" className="sc-lab-content" tabIndex={-1}>
         {view === 'Overview' ? <>
-          <section className="sc-lab-hero" data-running={running}>
+          <section className="sc-lab-hero" data-running={running} data-motion={playback.motion}>
             <div className="sc-lab-hero-main">
-              <div><h1>Incident overview</h1><p>Trace a checkout alert through service metrics, deployment context, and evidence.</p></div>
-              {scenarioForm}
+              <div className="sc-hero-copy">
+                <span className="sc-hero-service"><Server size={15} aria-hidden="true"/> checkout-api</span>
+                <h1>Incident <span>overview</span></h1>
+                <p>Follow a checkout alert from its first signal to the evidence behind it.</p>
+                {scenarioForm}
+              </div>
+              <InvestigationMap run={run} step={step} playback={playback}/>
             </div>
-            <InvestigationProgress step={step} run={run}/>
           </section>
           {!ready && <p className="sc-lab-loading" role="status"><Loader2 className="sc-spin" size={19} aria-hidden="true"/> Loading the sample investigation…</p>}
           {run && <>
             {running && <p className="sc-lab-previous">Showing the previous result while the new scenario runs.</p>}
-            <InvestigationOverview key={run.id} run={run} tab={tab} onTabChange={setTab} onAudit={() => navigate('Audit log')}/>
+            <InvestigationOverview key={run.id} run={run} tab={tab} playback={playback} onTabChange={setTab} onAudit={() => navigate('Audit log')}/>
             {!presenting && <>
               <div className="sc-lab-section-heading">
                 <h2>Recent investigations</h2>
