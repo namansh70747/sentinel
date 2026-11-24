@@ -508,3 +508,19 @@ in the three checkout measurements. The shared Grafana instance also delivered
 a test checkout alert through the existing checkout route during acceptance,
 so these results do not establish notification route isolation. Grafana reload
 confirmed the checkout job filter was active and no temporary rules remained.
+
+### Recovery and route isolation
+
+The acceptance runner now uses a disposable Grafana instance at loopback port
+3024, on the Sentinel observe network. Start it with Grafana 13.0.2, with the
+local Grafana admin password supplied privately and no provisioning or data
+volume from the default Grafana instance. The runner uses the same Prometheus
+and Sentinel console and asserts that its alert title never creates an incident
+in another workspace. Stop the disposable instance when both runs finish.
+
+To recover an incident in Sentinel, enter verification and request a fresh
+investigation. The latest completed observation must be live, collected after
+verification began, and within five minutes. It must have actual requests,
+covered five-minute availability and covered ten-minute latency, both meeting
+the current service SLO. Missing long-window data may still limit severity
+assessment. Grafana resolution and incident recovery are recorded independently.

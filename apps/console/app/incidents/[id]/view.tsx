@@ -50,14 +50,15 @@ export function IncidentView({ workspaceId, incidentId }: { workspaceId: string;
   </section>
   <section>
    <h2>Recovery</h2>
-   <p>A resolved alert does not close this incident. Recovery requires a live covered Prometheus result.</p>
-   <form onSubmit={async event => {
+   <p>Begin verification after the service stabilizes, then refresh the investigation. Mark recovery once fresh live availability and latency meet the service SLO.</p>
+   {['investigating','advised','escalated','verifying'].includes(row.state)&&<form onSubmit={async event => {
     event.preventDefault();
     const reason = String(new FormData(event.currentTarget).get('reason') ?? '');
-    const response = await fetch(`/api/workspaces/${workspaceId}/incidents/${incidentId}/transitions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ toState: 'recovered', reason, expectedVersion: Number(row.state_version) }) });
+    const response = await fetch(`/api/workspaces/${workspaceId}/incidents/${incidentId}/transitions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ toState: row.state==='verifying'?'recovered':'verifying', reason, expectedVersion: Number(row.state_version) }) });
     const payload = await response.json();
+    if(response.ok)setRow(current=>current?{...current,state:payload.state,state_version:payload.stateVersion}:current);
     setNotice(response.ok ? `State is ${payload.state}.` : payload.error ?? 'Transition refused');
-   }}><label>Reason<textarea name="reason" required maxLength={500} /></label><button>Mark recovered</button></form>
+   }}><label>Reason<textarea name="reason" required maxLength={500} /></label><button>{row.state==='verifying'?'Mark recovered':'Begin verification'}</button></form>}
    <form onSubmit={async event => {
     event.preventDefault();
     const response = await fetch(`/api/workspaces/${workspaceId}/incidents/${incidentId}/postmortem`, { method: 'POST' });

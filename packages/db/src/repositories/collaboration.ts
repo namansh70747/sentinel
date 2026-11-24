@@ -15,6 +15,16 @@ const edges: Record<string, readonly string[]> = {
 export async function appendWorkspaceEvent(client: PoolClient, workspaceId: string, type: string, subjectId: string | null, payload: Record<string, unknown>) {
  await client.query('INSERT INTO workspace_events(workspace_id,seq,type,subject_id,payload) VALUES($1,(SELECT COALESCE(MAX(seq),0)+1 FROM workspace_events WHERE workspace_id=$1),$2,$3,$4::jsonb)', [workspaceId, type, subjectId, JSON.stringify(payload)]);
 }
+export function qualifiesForRecovery(evidence: { outcome: string; provenance: string; detail: unknown; availability_target: number; latency_target_ms: number } | undefined) {
+ if (!evidence || evidence.provenance!=='live' || !['ok','uncovered'].includes(evidence.outcome)) return false;
+ const sample=evidence.detail as { good5m?: number; total5m?: number; p99_10m_ms?: number; coverage?: {windowSeconds:number;inputs:{input:string;covered:boolean}[]}[] } | null;
+ const good=sample?.good5m, total=sample?.total5m, latency=sample?.p99_10m_ms;
+ if (typeof good!=='number'||typeof total!=='number'||typeof latency!=='number') return false;
+ if (![good,total,latency].every(Number.isFinite)||total<=0||good<0||good>total||latency<0) return false;
+ const covered=(seconds:number,input:string)=>sample?.coverage?.some(w=>w.windowSeconds===seconds&&w.inputs.some(s=>s.input===input&&s.covered===true));
+ return !!covered(300,'goodCoverageQuery')&&!!covered(300,'totalCoverageQuery')&&!!covered(600,'latencyCoverageQuery')
+  && good/total>=evidence.availability_target&&latency<=evidence.latency_target_ms;
+}
 export class CollaborationRepository {
  constructor(private readonly db: SentinelDatabase) {}
  async notes(workspaceId: string, incidentId: string) {
@@ -40,9 +50,20 @@ export class CollaborationRepository {
    if (Number(incident.state_version) !== expectedVersion) return { error: 'conflict' as const };
    if (!edges[incident.state]?.includes(toState)) return { error: 'invalid' as const };
    if (toState === 'recovered') {
-    const evidence = (await client.query("SELECT source,outcome,provenance,window_covered FROM incident_evidence WHERE workspace_id=$1 AND incident_id=$2 AND source='prometheus'", [workspaceId, incidentId])).rows;
-    const covered = evidence.some(row => row.provenance === 'live' && row.outcome === 'ok' && row.window_covered === true);
-    if (!covered) return { error: 'unrecovered' as const };
+    const evidence = (await client.query(`
+     SELECT e.detail, e.observed_at, e.outcome, e.provenance,
+       slo.availability_target, slo.latency_target_ms
+     FROM investigation_evidence e
+     JOIN investigation_runs r ON r.workspace_id=e.workspace_id AND r.id=e.run_id
+     JOIN service_slos slo ON slo.workspace_id=e.workspace_id AND slo.service_id=e.service_id
+     WHERE e.workspace_id=$1 AND e.incident_id=$2 AND e.service_id=$3 AND e.source='prometheus'
+      AND r.status IN ('advised','escalated')
+      AND e.observed_at >= now()-interval '5 minutes'
+      AND e.observed_at <= now()
+      AND e.observed_at >= (SELECT max(created_at) FROM incident_transitions
+       WHERE workspace_id=$1 AND incident_id=$2 AND to_state='verifying')
+     ORDER BY e.observed_at DESC LIMIT 1`, [workspaceId, incidentId, incident.service_id])).rows[0];
+    if (!qualifiesForRecovery(evidence)) return { error: 'unrecovered' as const };
    }
    await client.query('UPDATE incidents SET state=$3,state_version=state_version+1 WHERE workspace_id=$1 AND id=$2', [workspaceId, incidentId, toState]);
    const id = randomUUID();

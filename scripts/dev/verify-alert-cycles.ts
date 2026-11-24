@@ -8,16 +8,18 @@ loadEnvFile('.local/compose.env');
 const db = new SentinelDatabase('postgres://sentinel_app:' + encodeURIComponent(process.env.SENTINEL_DATABASE_PASSWORD!) + '@127.0.0.1:55441/sentinel');
 const workspace = randomUUID();
 const prefix = 'accept-' + workspace.slice(0, 8);
-const base = 'http://127.0.0.1:3012';
-const headers = {
+const base = 'http://127.0.0.1:3024';
+const headers: Record<string,string> = {
  authorization: 'Basic ' + Buffer.from('admin:' + process.env.GF_SECURITY_ADMIN_PASSWORD).toString('base64'),
  'content-type': 'application/json',
 };
 const cleanup: string[] = [];
+
 async function grafana(path: string, method = 'GET', body?: unknown) {
  const response = await fetch(base + path, { method, headers, body:body === undefined ? undefined : JSON.stringify(body),signal:AbortSignal.timeout(10000) });
  if (!response.ok) throw new Error(`Grafana ${method} ${path} returned ${response.status}`);
- return response.status === 204 ? null : response.json();
+ const text=await response.text();
+ return text ? JSON.parse(text) : null;
 }
 async function poll<T>(label: string, read: () => Promise<T | undefined>, ms = 150000): Promise<T> {
  const end = Date.now() + ms;
@@ -60,8 +62,21 @@ async function tempoSample(service:typeof services[number], traceId:string, star
  },45000);
 }
 try {
- const [template] = await grafana(api+'/alert-rules');
- if (!template?.data?.[0]?.model) throw Error('Expected existing local rule template');
+ const source=await fetch('http://127.0.0.1:3012'+api+'/alert-rules',{headers,signal:AbortSignal.timeout(10000)});
+ if(!source.ok)throw Error('Could not read the local Grafana rule template');
+ const original=(await source.json()).find((rule:{uid:string})=>rule.uid==='sentinel-workload-failures');
+ if (!original?.data?.[0]?.model) throw Error('Expected existing local rule template');
+ const alerts=await grafana(api+'/alert-rules');
+ const contacts=await grafana(api+'/contact-points');
+ if(alerts.some((rule:{uid:string})=>!rule.uid.startsWith('accept-'))||
+  contacts.some((contact:{uid:string;type:string})=>contact.type==='webhook'&&!contact.uid.startsWith('accept-')))throw Error('Expected dedicated acceptance Grafana');
+
+ const datasources=await grafana('/api/datasources');
+ if(!datasources.some((source:{uid:string})=>source.uid==='sentinel-prometheus')){
+  await grafana('/api/datasources','POST',{uid:'sentinel-prometheus',name:'Acceptance Prometheus',type:'prometheus',access:'proxy',url:'http://prometheus:9090'});
+ }
+ const folder=await grafana('/api/folders','POST',{title:prefix});
+ const template={...original,orgID:1,folderUID:folder.uid};
  await db.pool.query('INSERT INTO workspaces(id,name) VALUES($1,$2)',[workspace,prefix]);
  const selection=process.argv[2];
  if(selection&&!services.some(s=>s.name===selection))throw Error('Choose checkout or payments');
@@ -75,6 +90,8 @@ try {
   const contact={uid:name,name,type:'webhook',disableResolveMessage:false,settings:{url:'http://console:3010/api/webhooks/grafana/'+endpoint,httpMethod:'POST',headers:{'x-sentinel-secret':secret}}};
   await grafana(api+'/contact-points','POST',contact);
   cleanup.unshift(api+'/contact-points/'+name);
+  // Grafana reconciles contact points asynchronously before rules can use them.
+  await delay(65000);
   for(let cycle=1;cycle<=2;cycle++){
    const uid=name+'-'+cycle;
    const {id:_id,updated:_updated,provenance:_provenance,...rule}=structuredClone(template);
@@ -97,7 +114,10 @@ try {
    });
    const payload={alerts:[{...firing,status:'firing'}]};
    const keys=normalizeGrafanaAlerts(payload)[0].compatibleDedupeKeys;
-   const incident=await poll('Sentinel delivery '+uid,()=>db.inWorkspace(workspace,async c=>(await c.query("SELECT incident_id FROM incident_signals WHERE service_id=$1 AND status='firing' AND dedupe_key=ANY($2::text[])",[id,keys])).rows[0]?.incident_id));
+   const incident=await poll('Sentinel delivery '+uid,async()=>{
+    await request(service.port,true);
+    return db.inWorkspace(workspace,async c=>(await c.query("SELECT incident_id FROM incident_signals WHERE service_id=$1 AND status='firing' AND dedupe_key=ANY($2::text[])",[id,keys])).rows[0]?.incident_id);
+   });
    const replay=await fetch('http://127.0.0.1:3010/api/webhooks/grafana/'+endpoint,{method:'POST',headers:{'content-type':'application/json','x-sentinel-secret':secret},body:JSON.stringify(payload)});
    if(replay.status!==202 || (await replay.json()).investigationsQueued!==0)throw Error('Replay did not deduplicate');
    const [investigation,resolution,sample,loki]=await Promise.all([
@@ -118,7 +138,12 @@ try {
      return body.data.result.some((stream:{values:[string,string][]})=>stream.values.some(([,line])=>line.includes(first.traceId!)))?true:undefined;
     },45000),
    ]);
-   console.log(JSON.stringify({service:service.name,cycle,incident,investigation,resolution,loki,replayQueued:0,tempo:sample}));
+   const scopes=(await db.pool.query('SELECT id FROM workspaces WHERE id<>$1',[workspace])).rows;
+   for(const scope of scopes){
+    const leaked=await db.inWorkspace(scope.id,async c=>(await c.query('SELECT 1 FROM incidents WHERE workspace_id=$1 AND title=$2 LIMIT 1',[scope.id,uid])).rowCount);
+    if(leaked)throw Error('Alert appeared outside its acceptance workspace');
+   }
+   console.log(JSON.stringify({routeIsolated:true,service:service.name,cycle,incident,investigation,resolution,loki,replayQueued:0,tempo:sample}));
    await grafana(api+'/alert-rules/'+uid,'DELETE');
    cleanup.shift();
   }

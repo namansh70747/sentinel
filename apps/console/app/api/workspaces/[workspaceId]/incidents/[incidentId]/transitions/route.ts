@@ -15,7 +15,7 @@ export async function POST(request: Request, context: { params: Promise<{ worksp
  const result = await new CollaborationRepository(getDatabase()).transition(workspaceId, access.identity.id, incidentId, body.toState, body.reason, body.expectedVersion);
  if ('error' in result && result.error === 'missing') return Response.json({ error: 'Investigation not found' }, { status: 404 });
  if ('error' in result && result.error === 'conflict') return Response.json({ error: 'Incident changed. Reload and retry.' }, { status: 409 });
- if ('error' in result && result.error === 'unrecovered') return Response.json({ error: 'Recovery requires a live covered Prometheus result. Simulated evidence does not count.' }, { status: 409 });
+ if ('error' in result && result.error === 'unrecovered') return Response.json({ error: 'Refresh the investigation after entering verification. Recovery requires covered live availability and latency that meet the current SLO.' }, { status: 409 });
  if ('error' in result) return Response.json({ error: 'That transition is not available from the current state' }, { status: 409 });
  return Response.json(result);
 }
