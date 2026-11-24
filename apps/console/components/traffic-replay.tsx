@@ -44,9 +44,18 @@ export function TrafficReplay() {
    {[24, 60, 96, 132].map(line => <path key={line} d={'M0 ' + line + 'H640'} className="traffic-grid"/>)}
    <path d={path + ' L640 148 H0 Z'} fill={'url(#' + gradient + ')'}/>
    <path key={scenario} d={path} pathLength="1" className="traffic-line" vectorEffect="non-scaling-stroke"/>
-   <line x1={x} x2={x} y1="0" y2="148" className="traffic-cursor"/>
-   <circle cx={x} cy={y} r="5" className="traffic-dot"/>
+   <g className="traffic-marker" data-start={step === 0} style={{transform: 'translateX(' + x + 'px)'}}>
+    <line x1="0" x2="0" y1="0" y2="148" className="traffic-cursor"/>
+    <g className="traffic-marker-point" style={{transform: 'translateY(' + y + 'px)'}}>
+     <circle cx="0" cy="0" r="10" className="traffic-halo"/>
+     <circle cx="0" cy="0" r="5" className="traffic-dot"/>
+    </g>
+   </g>
   </svg>
+  <label className="traffic-scrubber">
+   <span>Replay position <output>{step + 1} / {values.length}</output></span>
+   <input type="range" min="0" max={interval} value={step} onChange={event => {setPlaying(false); setStep(Number(event.target.value));}} />
+  </label>
   <div className="traffic-controls" role="group" aria-label="Telemetry scenario">
    {Object.entries(scenarios).map(([id, label]) => <button key={id} type="button" aria-pressed={scenario === id} onClick={() => {setScenario(id as Replay); setStep(0);}}>{label}</button>)}
   </div>

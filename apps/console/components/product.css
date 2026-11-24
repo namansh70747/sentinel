@@ -269,3 +269,37 @@
  @keyframes signal-draw { from { stroke-dasharray: 0 1; } to { stroke-dasharray: 1 0; } }
  @keyframes signal-value { from { opacity: .65; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 }
+
+.signal-deck { position: relative; isolation: isolate; overflow: hidden; }
+.signal-deck::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -30%;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 65% 32%, #83f3ba30, transparent 42%);
+}
+.traffic-halo { fill: #8bf5bb; opacity: .16; }
+.sc-product .traffic-scrubber { display: grid; margin: 0 0 13px; color: #b2ccbf; }
+.traffic-scrubber span { display: flex; justify-content: space-between; gap: 10px; }
+.traffic-scrubber output { font-variant-numeric: tabular-nums; }
+.sc-product .traffic-scrubber input[type=range] {
+  cursor: pointer;
+  accent-color: #a2f8c4;
+  min-height: 25px;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .signal-deck:has(.traffic-replay[data-playing=true])::before { animation: signal-drift 9s ease-in-out alternate infinite; }
+  .traffic-replay[data-playing=true] .traffic-marker:not([data-start=true]),
+  .traffic-replay[data-playing=true] .traffic-marker:not([data-start=true]) .traffic-marker-point {
+    transition: transform 720ms cubic-bezier(.22,.75,.3,1);
+  }
+  .traffic-replay[data-playing=true] .traffic-halo { animation: signal-halo 1.8s ease-out infinite; transform-origin: center; transform-box: fill-box; }
+  .signal-launch, .traffic-controls button, .traffic-toggle { transition: background-color .2s ease, border-color .2s ease, transform .2s ease; }
+  .signal-launch:hover, .traffic-toggle:hover { transform: translateY(-2px); }
+  @keyframes signal-drift { to { transform: translate(-10%, 8%) scale(1.12); } }
+  @keyframes signal-halo { from { transform: scale(.85); opacity: .26; } to { transform: scale(1.8); opacity: 0; } }
+}
