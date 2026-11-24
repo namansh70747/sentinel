@@ -16,7 +16,7 @@ export default async function Dashboard() {
   const configured = Boolean(getAuth());
   if (configured && !(await currentIdentity())) redirect('/login');
 
-  return <div className="product-dashboard ops-dashboard">
+  return <div className="product-dashboard ops-dashboard desk-enter">
     <header className="desk-title">
       <div><h1>Operations overview</h1><p>Investigate incidents, manage services, and connect evidence sources.</p></div>
       {configured && <Link className="desk-primary" href="/incidents">Open investigations <ArrowUpRight size={16}/></Link>}
