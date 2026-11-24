@@ -35,7 +35,7 @@ body {
 }
 
 .source-list { list-style: none; padding: 0; }
-.source-list li { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid #7d8f99; }
+.source-list li { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 0; border-bottom: 1px solid #7d8f99; }
 .source-list li.simulated { border-bottom-style: dashed; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
