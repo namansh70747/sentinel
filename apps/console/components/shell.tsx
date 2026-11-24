@@ -24,7 +24,7 @@ const links = [
 export function Shell({ children }: { children: ReactNode }) {
   const path = usePathname();
   if (path === "/" || path === "/demo/showcase") return <>{children}</>;
-  if (path === '/login') return <div className="sc-app sc-auth"><main className="sc-product-content"><Link href="/" className="sc-brand"><Shield size={24}/>sentinel.</Link>{children}</main></div>;
+  if (path === '/login') return <div className="sc-app sc-auth"><main className="sc-product-content"><Link href="/" className="sc-brand"><BrandMark/>Sentinel</Link>{children}</main></div>;
   if (!path.startsWith('/demo')) return <ProductFrame>{children}<Toaster theme="light" position="bottom-right" /></ProductFrame>;
   return (
     <LiveProvider enabled={path.startsWith("/demo")}>
@@ -35,6 +35,10 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 }
 
+function BrandMark() {
+ return <span className="desk-brand-mark" aria-hidden="true"><Activity size={20} strokeWidth={2.4}/></span>;
+}
+
 function ProductFrame({children}:{children:ReactNode}) {
  const path=usePathname();
  const [signingOut,setSigningOut]=useState(false),[logoutError,setLogoutError]=useState('');
@@ -43,13 +47,13 @@ function ProductFrame({children}:{children:ReactNode}) {
  const active=items.find(item=>path.startsWith(item.href));
  return <div className="sc-app sc-product">
   <aside className="sc-sidebar">
-   <Link href="/dashboard" className="sc-brand"><span className="sc-logo"><Shield size={22}/></span>sentinel<span className="sc-brand-dot">.</span></Link>
-   <div className="sc-workspace"><span className="sc-workspace-icon">S</span><div><strong>Your workspaces</strong><small>Select a workspace below</small></div></div>
+   <Link href="/dashboard" className="sc-brand"><BrandMark/>Sentinel</Link>
+
    <span className="sc-nav-label">WORKSPACE</span>
    <nav aria-label="Product navigation">{items.map(({href,label,icon:Icon})=><Link key={href} href={href} aria-label={label} title={label} aria-current={path.startsWith(href)?'page':undefined} className={`sc-product-nav ${path.startsWith(href)?'active':''}`}><Icon size={18}/><span>{label}</span></Link>)}</nav>
    <div className="sc-sidebar-bottom"><Link className="sc-readiness" aria-label="Explore demo" title="Explore demo" href="/demo/showcase"><span>Explore demo</span><ArrowUpRight size={15}/></Link><div className="sc-safe"><ShieldCheck size={18}/><div><strong>Read-only by design</strong><small>Evidence before action</small></div></div></div>
   </aside>
-  <div className="sc-main"><header className="sc-topbar"><div><span className="sc-breadcrumb">Workspace</span><ChevronRight size={14}/><strong>{active?.label??'Workspace'}</strong></div><div className="sc-header-right"><span className="sc-environment"><i/>Advise mode</span>{path!=='/login'&&<button onClick={signOut} disabled={signingOut}>{signingOut?'Signing out…':'Sign out'}</button>}</div></header>{logoutError&&<p role="alert">{logoutError}</p>}<main className="sc-content sc-product-content">{children}</main><footer className="sc-footer"><span><Shield size={13}/>Sentinel / Evidence before action.</span><Link href="/demo/showcase">Open interactive demo <ArrowUpRight size={12}/></Link></footer></div>
+  <div className="sc-main"><header className="sc-topbar"><div><span className="sc-breadcrumb">Workspace</span><ChevronRight size={14}/><strong>{active?.label??'Workspace'}</strong></div><div className="sc-header-right"><span className="sc-environment"><i/>Advise mode</span>{path!=='/login'&&<button onClick={signOut} disabled={signingOut}>{signingOut?'Signing out…':'Sign out'}</button>}</div></header>{logoutError&&<p role="alert">{logoutError}</p>}<main className="sc-content sc-product-content">{children}</main><footer className="sc-footer"><span>Sentinel</span><Link href="/demo/showcase">Open interactive demo <ArrowUpRight size={12}/></Link></footer></div>
  </div>;
 }
 
