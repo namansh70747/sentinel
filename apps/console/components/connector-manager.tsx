@@ -4,11 +4,12 @@ import { Plug,Plus,RefreshCw,ShieldCheck,X } from 'lucide-react';
 import { providers,type Provider } from '@sentinel/connectors/config';
 import { KubernetesInspector } from './kubernetes-inspector';
 import { GitHubSyncManager } from './github-sync-manager';
+import { activeWorkspaceId, rememberWorkspace } from '../lib/workspace-role';
 interface Workspace {workspace_id:string;name:string;role:string}
 interface Connection {id:string;provider:Provider;name:string;mode:'live'|'off';config:Record<string,string|number>;configVersion:number;hasSecret:boolean;lastSuccessfulRead:string|null;lastTest:{id:string;status:string;configVersion:number;finishedAt:string|null;result:{outcome:string;capability:string;recordCount:number;errorCode?:string}|null}|null}
 const labels:Record<Provider,string>={prometheus:'Prometheus',loki:'Loki',tempo:'Tempo',grafana:'Grafana',github:'GitHub',ntfy:'ntfy',slack:'Slack',kubernetes:'Kubernetes',ecs:'AWS ECS + CloudWatch'};
 const bindingFields:Record<Provider,string[]>={prometheus:['goodQuery','totalQuery','latencyQuery','goodCoverageQuery','totalCoverageQuery','latencyCoverageQuery'],loki:['query'],tempo:['serviceName'],github:['owner','repo'],grafana:['endpointId'],ntfy:[],slack:[],kubernetes:['namespace','labelSelector'],ecs:['serviceArn','readRoleArn']};
-export function ConnectorManager({planned}:{planned:{id:string;name:string;category:string}[]}){
+export function ConnectorManager({planned,initialWorkspaceId}:{planned:{id:string;name:string;category:string}[];initialWorkspaceId?:string}){
  const [workspaces,setWorkspaces]=useState<Workspace[]>([]),[workspace,setWorkspace]=useState(''),[connections,setConnections]=useState<Connection[]>([]),[services,setServices]=useState<{id:string;name:string}[]>([]);
  const [tab,setTab]=useState('Configured connections'),[message,setMessage]=useState('Loading workspaces…'),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[editing,setEditing]=useState<Connection|null|undefined>(undefined),[provider,setProvider]=useState<Provider>('prometheus'),[mapping,setMapping]=useState<Connection|null>(null);
  const admin=workspaces.find(item=>item.workspace_id===workspace)?.role==='admin';
@@ -24,12 +25,12 @@ export function ConnectorManager({planned}:{planned:{id:string;name:string;categ
   return()=>{dialog?.removeEventListener('keydown',trap);previous?.focus();};
  },[editing,mapping]);
  async function request(path:string,options?:RequestInit){const response=await fetch(path,{cache:'no-store',...options});const body=await response.json();if(!response.ok)throw new Error(body.error??'Connection request failed');return body;}
- useEffect(()=>{let active=true;request('/api/workspaces').then((rows:Workspace[])=>{if(!active)return;let saved='';try{saved=localStorage.getItem('sentinel-active-workspace')??'';}catch{}setWorkspaces(rows);setWorkspace(rows.find(row=>row.workspace_id===saved)?.workspace_id??rows[0]?.workspace_id??'');setMessage(rows.length?'':'Create a workspace in Overview first.');setLoading(false);}).catch(error=>{if(active){setMessage(error.message);setLoading(false);}});return()=>{active=false;};},[]);
+ useEffect(()=>{let active=true;request('/api/workspaces').then((rows:Workspace[])=>{if(!active)return;setWorkspaces(rows);setWorkspace(activeWorkspaceId(rows,initialWorkspaceId));setMessage(rows.length?'':'Create a workspace in Overview first.');setLoading(false);}).catch(error=>{if(active){setMessage(error.message);setLoading(false);}});return()=>{active=false;};},[initialWorkspaceId]);
  const awsConnections=connections.filter(connection=>connection.provider==='ecs'&&connection.mode==='live');
  const endpoint=`/api/workspaces/${workspace}/connectors`;
  async function refresh(){if(!workspace)return;const rows=await request(endpoint);if(activeWorkspace.current===workspace)setConnections(rows);}
  useEffect(()=>{
-  if(!workspace)return;let active=true;setConnections([]);setServices([]);setLoading(true);try{localStorage.setItem('sentinel-active-workspace',workspace);}catch{}
+  if(!workspace)return;let active=true;setConnections([]);setServices([]);setLoading(true);rememberWorkspace(workspace);
   setMessage('');
   const load=async()=>{try{const [rows,catalog]=await Promise.all([request(`/api/workspaces/${workspace}/connectors`),request(`/api/workspaces/${workspace}/services`)]);if(active){setConnections(rows);setServices(catalog);}}catch(error){if(active)setMessage(error instanceof Error?error.message:'Unable to load connections');}finally{if(active)setLoading(false);}};
   void load();const timer=setInterval(load,5000);return()=>{active=false;clearInterval(timer);};

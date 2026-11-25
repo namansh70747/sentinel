@@ -6,14 +6,13 @@ interface RunDetail extends Run {
  attempts:{source:string;id:string;connector_id:string|null;config_version:number|null}[];
  evidence:{source:string;outcome:string;provenance:string|null;detail:unknown;observed_at:string|null;collected_at:string}[];
 }
-export function InvestigationRuns({workspaceId,incidentId}:{workspaceId:string;incidentId:string}){
+export function InvestigationRuns({workspaceId,incidentId,canRefresh}:{workspaceId:string;incidentId:string;canRefresh:boolean}){
  const [runs,setRuns]=useState<Run[]>([]),[selected,setSelected]=useState(''),[detail,setDetail]=useState<RunDetail|null>(null);
- const [allowed,setAllowed]=useState(false),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const base=`/api/workspaces/${workspaceId}`;
  const scope=`${workspaceId}:${incidentId}`,activeScope=useRef(scope);activeScope.current=scope;
  useEffect(()=>{
-  let active=true;const controller=new AbortController();setSelected('');setDetail(null);setRuns([]);setLoading(true);setError('');setAllowed(false);
-  fetch('/api/workspaces',{signal:controller.signal,cache:'no-store'}).then(response=>response.json()).then(rows=>{if(active&&Array.isArray(rows))setAllowed(rows.some(row=>row.workspace_id===workspaceId&&['admin','responder'].includes(row.role)));}).catch(()=>{});
+  let active=true;const controller=new AbortController();setSelected('');setDetail(null);setRuns([]);setLoading(true);setError('');
   const load=async()=>{try{
    const response=await fetch(`${base}/incidents/${incidentId}/investigations`,{signal:controller.signal,cache:'no-store'});
    if(!response.ok)throw new Error('Unable to load investigation runs');const rows:Run[]=await response.json();
@@ -33,7 +32,7 @@ export function InvestigationRuns({workspaceId,incidentId}:{workspaceId:string;i
   }catch(cause){if(activeScope.current===scope)setError(cause instanceof Error?cause.message:'Unable to request investigation');}finally{if(activeScope.current===scope)setBusy(false);}
  }
  return <section className="sc-card sc-detail-pad" aria-label="Investigation runs">
-  <div className="sc-heading"><div><h2>Fresh investigations</h2><p>Each refresh keeps its own evidence and configuration versions.</p></div>{allowed&&<button className="sc-button sc-primary" disabled={busy} onClick={refresh}><RefreshCw size={15}/>{busy?'Requesting…':'Refresh investigation'}</button>}</div>
+  <div className="sc-heading"><div><h2>Fresh investigations</h2><p>Each refresh keeps its own evidence and configuration versions.</p></div>{canRefresh&&<button className="sc-button sc-primary" disabled={busy} onClick={refresh}><RefreshCw size={15}/>{busy?'Requesting…':'Refresh investigation'}</button>}</div>
   {error&&<p role="alert">{error}</p>}
   {loading?<p role="status">Loading investigation runs…</p>:!runs.length?<p>No refresh runs yet. Existing evidence remains available below.</p>:<>
    <label>Investigation run<select value={selected} onChange={event=>setSelected(event.target.value)}>{runs.map(run=><option key={run.id} value={run.id}>{new Date(run.created_at).toLocaleString()} · {run.status} · {run.id.slice(0,8)}</option>)}</select></label>

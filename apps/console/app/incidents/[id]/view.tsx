@@ -4,7 +4,7 @@ import { SourceList, type SourceRow } from '../../../components/source-list';
 import { InvestigationRuns } from '../../../components/investigation-runs';
 type Incident = { id: string; title: string; state: string; state_version: number; severity: string; observed_severity: string | null; sources: SourceRow[] };
 type Note = { id: string; body: string };
-export function IncidentView({ workspaceId, incidentId }: { workspaceId: string; incidentId: string }) {
+export function IncidentView({ workspaceId, incidentId, canRespond }: { workspaceId: string; incidentId: string; canRespond: boolean }) {
  const [row, setRow] = useState<Incident | null>(null);
  const [notes, setNotes] = useState<Note[]>([]);
  const [error, setError] = useState('');
@@ -31,12 +31,12 @@ export function IncidentView({ workspaceId, incidentId }: { workspaceId: string;
  return <article>
   <h1>{row.title}</h1>
   <p>{row.observed_severity ?? 'not measured'} / {row.state}</p>
-  <InvestigationRuns workspaceId={workspaceId} incidentId={incidentId}/>
+  <InvestigationRuns workspaceId={workspaceId} incidentId={incidentId} canRefresh={canRespond}/>
   <details><summary>Legacy incident evidence</summary><p>Historical observations are preserved separately from fresh investigation runs.</p><SourceList sources={row.sources ?? []} /></details>
   <section>
    <h2>Notes</h2>
    {notes.length ? notes.map(note => <p key={note.id}>{note.body}</p>) : <p>No operator notes yet.</p>}
-   <form onSubmit={async event => {
+   {canRespond && <form onSubmit={async event => {
     event.preventDefault();
     const form = event.currentTarget;
     const body = String(new FormData(form).get('body') ?? '');
@@ -46,9 +46,9 @@ export function IncidentView({ workspaceId, incidentId }: { workspaceId: string;
     setNotes(current => [...current, { id: payload.id, body }]);
     form.reset();
     setNotice('Note recorded.');
-   }}><label>Operator note<textarea name="body" required maxLength={4000} /></label><button>Record note</button></form>
+   }}><label>Operator note<textarea name="body" required maxLength={4000} /></label><button>Record note</button></form>}
   </section>
-  <section>
+  {canRespond && <section>
    <h2>Recovery</h2>
    <p>Begin verification after the service stabilizes, then refresh the investigation. Mark recovery once fresh live availability and latency meet the service SLO.</p>
    {['investigating','advised','escalated','verifying'].includes(row.state)&&<form onSubmit={async event => {
@@ -65,7 +65,7 @@ export function IncidentView({ workspaceId, incidentId }: { workspaceId: string;
     const payload = await response.json();
     setNotice(response.ok ? payload.markdown : payload.error ?? 'Draft failed');
    }}><button type="submit">Draft postmortem</button></form>
-   {notice && <p role="status">{notice}</p>}
-  </section>
+  </section>}
+  {notice && <p role="status">{notice}</p>}
  </article>;
 }

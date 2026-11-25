@@ -2,16 +2,11 @@ import Link from 'next/link';
 import { Activity, Database, Plug, ShieldCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { TrafficReplay } from '../../components/traffic-replay';
-import { WorkspaceSetup } from '../../components/workspace-setup';
-import { currentIdentity, getAuth } from '../../lib/auth';
+import { CreateWorkspace, WorkspaceDashboardEntry } from '../../components/workspace-dashboard-entry';
+import { dashboardMemberships } from '../../lib/role-dashboard-access';
+import { roleDashboardHref } from '../../lib/workspace-role';
 
 export const dynamic = 'force-dynamic';
-
-const shortcuts = [
-  { href: '/incidents', title: 'Investigations', detail: 'Review incidents and collected evidence', Icon: Activity },
-  { href: '/services', title: 'Service catalog', detail: 'Manage services and their objectives', Icon: Database },
-  { href: '/connectors#cloudwatch-heading', title: 'Connections', detail: 'Configure monitoring and AWS sources', Icon: Plug },
-];
 
 const demoAreas = [
   { href: '/demo/showcase?view=Incidents', title: 'Investigations', detail: 'Follow an incident from alert to evidence.', Icon: Activity },
@@ -19,24 +14,15 @@ const demoAreas = [
   { href: '/demo/showcase?view=Connectors', title: 'Connections', detail: 'Explore the sources behind the signals.', Icon: Plug },
 ];
 
-export default async function Dashboard() {
-  const configured = Boolean(getAuth());
-  if (configured && !(await currentIdentity())) redirect('/login');
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ create?: string }> }) {
+  const memberships = await dashboardMemberships();
+  if (memberships) {
+    if (!memberships.length || (await searchParams).create === '1') return <CreateWorkspace hasWorkspaces={memberships.length > 0}/>;
+    if (memberships.length === 1) redirect(roleDashboardHref(memberships[0]));
+    return <WorkspaceDashboardEntry memberships={memberships}/>;
+  }
 
   return <div className="product-dashboard ops-dashboard desk-enter">
-    {configured ? <>
-      <header className="desk-title">
-        <div><h1>Operations overview</h1><p>Investigate incidents, manage services, and connect evidence sources.</p></div>
-        <Link className="desk-primary" href="/incidents">Open investigations</Link>
-      </header>
-      <nav className="desk-shortcuts" aria-label="Workspace shortcuts">
-        {shortcuts.map(({href, title, detail, Icon}) => <Link href={href} key={href}>
-          <Icon size={21} aria-hidden="true"/>
-          <strong>{title}</strong><small>{detail}</small>
-        </Link>)}
-      </nav>
-      <WorkspaceSetup />
-    </> : <>
       <div className="signal-deck">
         <header className="signal-intro">
           <div className="signal-caption"><span /> Interactive demo · simulated data</div>
@@ -50,7 +36,7 @@ export default async function Dashboard() {
         </header>
         <TrafficReplay />
       </div>
-      <div className="demo-areas-heading"><div><h2>Explore the workspace</h2><p>Choose an area to explore with sample data.</p></div><Link href="/demo/showcase">Open full demo</Link></div>
+      <div className="demo-areas-heading"><div><h2>Explore the workspace</h2><p>Choose an area to explore with sample data.</p></div><Link href="/demo/roles/admin">Explore role dashboards</Link></div>
       <nav className="demo-areas" aria-label="Explore the demo workspace">
         {demoAreas.map(({href, title, detail, Icon}) => <Link href={href} className="demo-area" key={href}>
           <span className="demo-area-icon"><Icon size={22} aria-hidden="true"/></span>
@@ -62,6 +48,5 @@ export default async function Dashboard() {
         <div><h2>Bring your own signals</h2><p>Connect your workspace to services and sources such as AWS CloudWatch.</p></div>
         <Link className="desk-primary" href="/login">Set up workspace</Link>
       </section>
-    </>}
   </div>;
 }

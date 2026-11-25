@@ -80,4 +80,32 @@ describe.skipIf(!base || !process.env.TEST_DATABASE_URL)('authenticated workspac
 
 
  });
+
+ it('opens the dashboard for the workspace membership and denies an unrelated member',async()=>{
+  const created=await fetch(`${base}/api/workspaces`,{method:'POST',headers:headers(0),body:JSON.stringify({name:'Role dashboard boundary'})});
+  expect(created.status).toBe(201);
+  const {workspace_id:id}=await created.json();
+  const adminUrl=`${base}/dashboard/admin?workspace=${id}`;
+  const signedOut=await fetch(adminUrl,{redirect:'manual'});
+  expect(signedOut.headers.get('location')).toBe('/login');
+  expect((await fetch(adminUrl,{headers:headers(1),redirect:'manual'})).status).toBe(404);
+
+  const viewer=(await db.pool.query('SELECT identity_id FROM sessions WHERE token_hash=$1',[createHash('sha256').update(tokens[1]).digest('hex')])).rows[0];
+  await db.pool.query("INSERT INTO workspace_memberships(workspace_id,identity_id,role) VALUES($1,$2,'viewer')",[id,viewer.identity_id]);
+  const redirected=await fetch(adminUrl,{headers:headers(1),redirect:'manual'});
+  expect(redirected.headers.get('location')).toBe(`/dashboard/viewer?workspace=${id}`);
+  const dashboard=await fetch(`${base}/dashboard/viewer?workspace=${id}`,{headers:headers(1)});
+  expect(dashboard.status).toBe(200);
+  const page=await dashboard.text();
+  expect(page).toContain('Reliability overview');
+  expect(page).not.toContain('Workspace administration');
+
+  const second=await fetch(`${base}/api/workspaces`,{method:'POST',headers:headers(0),body:JSON.stringify({name:'Responder dashboard boundary'})});
+  expect(second.status).toBe(201);
+  const {workspace_id:responseWorkspace}=await second.json();
+  await db.pool.query("INSERT INTO workspace_memberships(workspace_id,identity_id,role) VALUES($1,$2,'responder')",[responseWorkspace,viewer.identity_id]);
+  const responsePage=await fetch(`${base}/dashboard/responder?workspace=${responseWorkspace}`,{headers:headers(1)});
+  expect(responsePage.status).toBe(200);
+  expect(await responsePage.text()).toContain('Incident response');
+ });
 });

@@ -3,12 +3,14 @@
 import {
   Activity, BookOpen, ChevronDown, CircleHelp, Database, Download, FileCheck2,
   FlaskConical, History, LayoutDashboard, Loader2, LockKeyhole, Maximize2,
-  Minimize2, Play, Plug, RotateCcw, Search, Server, ShieldCheck, X,
+  Minimize2, Play, Plug, RotateCcw, Search, Server, ShieldCheck, Users, X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { investigate, report, scenarios, type Run, type Scenario } from '../../showcase/model';
 import { BrandMark } from './brand-mark';
 import { MockAwsConnector } from './mock-aws-connector';
+import { ShowcaseRoleDashboard } from './showcase-role-dashboard';
+import { type WorkspaceRole } from '../lib/workspace-role';
 import {
   downloadReport, formatTime, InvestigationOverview, resultLabels, type EvidenceTab,
 } from './showcase-investigation';
@@ -19,6 +21,7 @@ import './showcase-refresh.css';
 
 const navigation = [
   { name: 'Overview', Icon: LayoutDashboard },
+  { name: 'Role dashboards', Icon: Users },
   { name: 'Incidents', Icon: Activity },
   { name: 'Services', Icon: Server },
   { name: 'Connectors', Icon: Plug },
@@ -51,8 +54,9 @@ function isRun(value: unknown): value is Run {
     Object.hasOwn(resultLabels, run.status);
 }
 
-export function Showcase({ standalone = false }: { standalone?: boolean }) {
-  const [view, setView] = useState<View>('Overview');
+export function Showcase({ standalone = false, initialRole }: { standalone?: boolean; initialRole?: WorkspaceRole }) {
+  const [view, setView] = useState<View>(initialRole ? 'Role dashboards' : 'Overview');
+  const [previewRole, setPreviewRole] = useState<WorkspaceRole>(initialRole ?? 'admin');
   const [scenario, setScenario] = useState<Scenario>('deployment');
   const [runs, setRuns] = useState<Run[]>([]);
   const [selected, setSelected] = useState('');
@@ -222,6 +226,7 @@ export function Showcase({ standalone = false }: { standalone?: boolean }) {
         </div>
         <div className="sc-lab-actions">
           <span className="sc-lab-simulation"><FlaskConical size={14} aria-hidden="true"/> Simulated data</span>
+          {presenting && view !== 'Role dashboards' && <button type="button" className="sc-control" onClick={() => navigate('Role dashboards')}><Users size={16} aria-hidden="true"/> Roles</button>}
           <button type="button" className="sc-control sc-presentation-toggle" onClick={() => setPresenting(current => !current)}>
             {presenting ? <Minimize2 size={16} aria-hidden="true"/> : <Maximize2 size={16} aria-hidden="true"/>}
             {presenting ? 'Exit presentation' : 'Present'}
@@ -256,7 +261,19 @@ export function Showcase({ standalone = false }: { standalone?: boolean }) {
               <IncidentTable runs={runs.slice(0, 4)} selected={run.id} onSelect={selectRun}/>
             </>}
           </>}
-        </> : <>
+        </> : view === 'Role dashboards' ? <ShowcaseRoleDashboard role={previewRole} selectRole={setPreviewRole}
+          standalone={standalone} presenting={presenting} ready={ready} runs={runs} actions={{
+            connectors: { activate: () => navigate('Connectors') },
+            services: { activate: () => navigate('Services') },
+            incidents: { activate: () => navigate('Incidents') },
+            newInvestigation: { activate: () => { if (ready) void start(); else navigate('Overview'); } },
+            audit: { activate: () => navigate('Audit log') },
+            incident: id => ({ activate: () => {
+              const record = runs.find(item => item.id === id);
+              if (record) selectRun(record);
+            } }),
+          }}/>
+          : <>
           <header className="sc-lab-page-heading">
             <div><h1>{secondaryPages[view].title}</h1><p>{secondaryPages[view].description}</p></div>
             {view === 'Incidents' && scenarioForm}
@@ -281,7 +298,7 @@ export function Showcase({ standalone = false }: { standalone?: boolean }) {
             <button type="button" className="sc-control" disabled={!run} onClick={() => run && downloadReport(run.id + '-report.md', report(run), 'text/markdown')}>
               <Download size={15} aria-hidden="true"/> Export report
             </button>
-            {!presenting && <button type="button" className="sc-control" disabled={!ready || running || resetting} onClick={reset}>
+            {!presenting && view !== 'Role dashboards' && <button type="button" className="sc-control" disabled={!ready || running || resetting} onClick={reset}>
               <RotateCcw size={15} aria-hidden="true"/> Reset demo
             </button>}
           </div>

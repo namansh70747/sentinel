@@ -25,7 +25,7 @@ const links = [
 
 export function Shell({ children, authConfigured }: { children: ReactNode; authConfigured: boolean }) {
   const path = usePathname();
-  if (path === "/" || path === "/demo/showcase") return <>{children}</>;
+  if (path === "/" || path === "/demo/showcase" || path.startsWith('/demo/roles/')) return <>{children}</>;
   if (path === '/login') return <div className="sc-app sc-auth"><main className="sc-product-content"><Link href="/dashboard" className="sc-brand"><BrandMark/>Sentinel</Link>{children}</main></div>;
   if (!path.startsWith('/demo')) return <ProductFrame authConfigured={authConfigured}>{children}<Toaster theme="light" position="bottom-right" /></ProductFrame>;
   return (
@@ -43,7 +43,7 @@ function ProductFrame({children, authConfigured}:{children:ReactNode;authConfigu
  async function signOut(){setSigningOut(true);setLogoutError('');try{const response=await fetch('/api/auth/logout',{method:'POST'});if(!response.ok)throw new Error();window.location.assign('/login');}catch{setLogoutError('Unable to sign out. Please retry.');setSigningOut(false);}}
  const items=[{href:'/dashboard',label:'Overview',icon:LayoutDashboard},{href:'/incidents',label:'Incidents',icon:Activity},{href:'/services',label:'Services',icon:Layers},{href:'/changes',label:'Changes',icon:Activity},{href:'/connectors',label:'Connectors',icon:Plug},{href:'/notifications',label:'Notifications',icon:Bell},{href:'/runbooks',label:'Runbooks',icon:BookOpen},{href:'/findings',label:'Findings',icon:Shield},{href:'/settings',label:'Settings',icon:ShieldCheck},{href:'/audit',label:'Audit log',icon:FileCheck2}];
  const active=items.find(item=>path.startsWith(item.href));
- return <div className="sc-app sc-product">
+ return <div className="sc-app sc-product" data-role-dashboard={path.startsWith('/dashboard/')}>
   <aside className="sc-sidebar">
    <Link href="/dashboard" className="sc-brand"><BrandMark/>Sentinel</Link>
 

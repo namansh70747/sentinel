@@ -16,10 +16,11 @@ type Incident = {
   sources: SourceRow[];
 };
 
-export function Investigations({ workspaceId, services, canStart }: {
+export function Investigations({ workspaceId, services, canStart, initiallyCompose = false }: {
   workspaceId: string;
   services: { id: string; name: string }[];
   canStart: boolean;
+  initiallyCompose?: boolean;
 }) {
   const [rows, setRows] = useState<Incident[] | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -27,7 +28,7 @@ export function Investigations({ workspaceId, services, canStart }: {
   const [refresh, setRefresh] = useState(0);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
-  const [compose, setCompose] = useState(false);
+  const [compose, setCompose] = useState(initiallyCompose);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [startError, setStartError] = useState('');
